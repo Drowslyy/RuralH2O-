@@ -9,8 +9,9 @@ import datetime
 
 
 # ── Tabla: usuarios ──────────────────────────────────────
+#Guardamos datos del usuarios
 class Usuario(Base):
-    __tablename__ = "usuarios"
+    __tablename__ = "usuarios" 
 
     id       = Column(Integer, primary_key=True, index=True)
     nombre   = Column(String(100))
@@ -20,6 +21,7 @@ class Usuario(Base):
 
 
 # ── Tabla: puntos_monitoreo ───────────────────────────────
+#Guardamos los puntos de monitoreo (Geograficamente)
 class PuntoMonitoreo(Base):
     __tablename__ = "puntos_monitoreo"
 
@@ -33,6 +35,7 @@ class PuntoMonitoreo(Base):
 
 
 # ── Tabla: mediciones ─────────────────────────────────────
+#Registra los niveles del agua
 class Medicion(Base):
     __tablename__ = "mediciones"
 
@@ -42,6 +45,6 @@ class Medicion(Base):
     cloro      = Column(Float)
     turbidez   = Column(Float)
     fecha      = Column(DateTime, default=datetime.datetime.utcnow)
-    punto_id   = Column(Integer, ForeignKey("puntos_monitoreo.id"), nullable=True)
+    punto_id   = Column(Integer, ForeignKey("puntos_monitoreo.id"), nullable=True) # Indica que el dato pertenece a un punto especifico de monitoreo
 
     punto      = relationship("PuntoMonitoreo", back_populates="mediciones")

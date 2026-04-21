@@ -11,6 +11,8 @@ SECRET_KEY = "ruralh2o-secret-aysen-2026"
 ALGORITHM  = "HS256"
 TOKEN_EXPIRE_MINUTES = 60
 
+#Convirte una clave de facil acceso (1234) en una cadena ilegible
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -21,6 +23,7 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
+#Se crea el TOKEN JWT (JSON Web Token)
 
 def crear_token(data: dict) -> str:
     payload = data.copy()
@@ -28,9 +31,12 @@ def crear_token(data: dict) -> str:
     payload.update({"exp": expira})
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
+# Revisa si el pase VIP que envía el usuario es válido y no ha expirado.
 
 def verificar_token(token: str) -> dict:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+
+

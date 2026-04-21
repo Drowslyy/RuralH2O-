@@ -21,7 +21,7 @@ def home():
 
 
 # ── RF-07: Registro de usuario (de prueba) ──
-@app.post("/usuarios/", response_model=schemas.Token)
+@app.post("/usuarios/", response_model=schemas.Token)  # Registra nuevos usuarios y les da su primer token.
 def registrar_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     existente = db.query(models.Usuario).filter(models.Usuario.email == datos.email).first()
     if existente:
@@ -35,13 +35,14 @@ def registrar_usuario(datos: schemas.UsuarioCreate, db: Session = Depends(get_db
     )
     db.add(nuevo)
     db.commit()
-    db.refresh(nuevo)
+    db.refresh(nuevo)   
 
     token = auth.crear_token({"sub": nuevo.email, "rol": nuevo.rol})
     return {"access_token": token, "token_type": "bearer"}
 
 
 # ── RF-07: Login ──────────────────────────────────────────
+# Verifica identidad y entrega el token de acceso.
 @app.post("/login", response_model=schemas.Token)
 def login(datos: schemas.LoginIn, db: Session = Depends(get_db)):
     usuario = db.query(models.Usuario).filter(models.Usuario.email == datos.email).first()
@@ -73,6 +74,8 @@ def listar_puntos(db: Session = Depends(get_db)):
 
 
 # ── RF-02: Registrar medición (guarda en BD) ──────────────
+# Recibe los datos químicos del agua
+
 @app.post("/mediciones/", response_model=schemas.MedicionOut)
 def crear_medicion(datos: schemas.MedicionCreate, db: Session = Depends(get_db)):
     nueva = models.Medicion(**datos.model_dump())
@@ -88,7 +91,7 @@ def crear_medicion(datos: schemas.MedicionCreate, db: Session = Depends(get_db))
 
 # ── RF-02: Listar mediciones ──────────────────────────────
 @app.get("/mediciones/")
-def listar_mediciones(db: Session = Depends(get_db)):
+def listar_mediciones(db: Session = Depends(get_db)): #Evalua a traves de la normativa
     mediciones = db.query(models.Medicion).all()
     resultado  = []
     for m in mediciones:
