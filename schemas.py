@@ -3,6 +3,7 @@
 # =============================
 
 from pydantic import BaseModel, Field
+from datetime import datetime
 from typing import Optional
 
 #Datos que entran en la API y salen a la API
@@ -11,41 +12,58 @@ from typing import Optional
 # ── Mediciones ────────────────────────────────────────────
 class MedicionBase(BaseModel):
     comunidad : str
-    ph        : float = Field(..., ge=0,  le=14,  description="pH entre 0 y 14")
-    cloro     : float = Field(..., ge=0,  le=5,   description="Cloro residual NCh 409: 0–5 mg/L")
-    turbidez  : float = Field(..., ge=0,          description="Turbidez no puede ser negativa")
+    ph        : float = Field(..., ge=0,  le=14)
+    cloro     : float = Field(..., ge=0,  le=5)
+    turbidez  : float = Field(..., ge=0)
+    punto_id  : int
 
 class MedicionCreate(MedicionBase): #Que datos recibes por parte del usuario
-    punto_id  : Optional[int] = None
+    pass
 
 class MedicionOut(MedicionBase): #Muestra los datos al usuarios 
-    id        : int
-    punto_id  : Optional[int]
+    id        : int 
+    fecha     : datetime
+    apta      : bool  
+    observaciones: Optional[str] = None
+
     class Config:
         from_attributes = True
 
 
 # ── Puntos de monitoreo ───────────────────────────────────
-class PuntoCreate(BaseModel):
-    nombre      : str
-    tipo_fuente : str = Field(..., description="pozo, rio o vertiente")
-    latitud     : float
-    longitud    : float
+class PuntoBase(BaseModel):
+    nombre : str
+    tipo_fuente : str
+    latitud : float
+    longitud : float
 
-class PuntoOut(PuntoCreate):
+
+class PuntoCreate(PuntoBase):
+    pass
+
+class PuntoOut(PuntoBase):
     id : int
     class Config:
         from_attributes = True
 
 
-# ── Autenticación ─────────────────────────────────────────
-class UsuarioCreate(BaseModel):
+# ── Usuario ─────────────────────────────────────────
+class UsuarioBase(BaseModel):
     nombre   : str
     email    : str
-    password : str
-    rol      : str = Field(..., description="registrador o visualizador")
+    rol : str
 
-class LoginIn(BaseModel):
+class UsuarioCreate(UsuarioBase):
+    password: str
+
+class UsuarioOut(UsuarioBase):
+    id : int
+    class Config:
+        from_attributes = True 
+
+# ── Login ─────────────────────────────────────────
+
+class LoginRequest(BaseModel):
     email    : str
     password : str
 
@@ -53,3 +71,22 @@ class LoginIn(BaseModel):
 class Token(BaseModel):
     access_token : str
     token_type   : str
+
+# ── Alertas ─────────────────────────────────────────
+
+class AlertaBase(BaseModel):
+    tipo : str
+    nivel : str 
+    mensaje : str 
+
+class AlertaCreate(AlertaBase):
+    medicion_id : int
+
+class AlertaOut(AlertaBase):
+    id: int
+    medicion_id : int
+    leida : bool
+    fecha : datetime
+
+    class Config:
+        from_attributes = True

@@ -1,6 +1,7 @@
 # RuralH2O — Sistema de Monitoreo de Calidad de Agua Rural
 
-> **Proyecto para Ingeniería Civil Informática - Universidad de Aysén.** > Solución digital para el seguimiento normativo (NCh 409) de sistemas de agua en comunidades rurales de la Región de Aysén.
+> **Proyecto para Ingeniería Civil Informática - Universidad de Aysén.**
+> Solución digital para el seguimiento normativo (NCh 409) de sistemas de agua en comunidades rurales de la Región de Aysén.
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)](https://www.python.org/)
@@ -15,6 +16,7 @@
 ### Características Principales
 * **Gestión de Puntos de Monitoreo:** Registro georreferenciado de pozos, ríos y vertientes.
 * **Validación Automática:** Motor de reglas basado en la NCh 409 (pH 6.5-8.5, Cloro ≤ 2.0, Turbidez ≤ 5.0).
+* **Sistema de Alertas:** Generación automática de notificaciones ante mediciones fuera de norma.
 * **Seguridad:** Autenticación de usuarios mediante **JWT** y encriptación **BCrypt**.
 * **Documentación API:** Integración nativa con Swagger y Redoc.
 
@@ -39,8 +41,8 @@
 ### Pasos
 1.  **Clonar el repositorio:**
     ```bash
-    git clone [https://github.com/tu-usuario/RuralH2O.git](https://github.com/tu-usuario/RuralH2O.git)
-    cd RuralH2O
+    git clone https://github.com/Drowslyy/RuralH2O-.git
+    cd RuralH2O-
     ```
 
 2.  **Crear entorno virtual:**
