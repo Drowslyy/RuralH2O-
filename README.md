@@ -14,7 +14,7 @@
 `RuralH2O` nace como respuesta a la brecha de digitalización en el monitoreo de agua potable en zonas rurales. El sistema permite registrar parámetros críticos (pH, Cloro, Turbidez) y evaluar automáticamente si cumplen con la **Norma Chilena 409**, facilitando la toma de decisiones para los comités de agua.
 
 ### Características Principales
-* **Gestión de Puntos de Monitoreo:** Registro georreferenciado de pozos, ríos y vertientes.
+* **Gestión de Puntos de Monitoreo:** Registro georreferenciado de pozos, ríos y vertientes, asociados a su comunidad.
 * **Validación Automática:** Motor de reglas basado en la NCh 409 (pH 6.5-8.5, Cloro ≤ 2.0, Turbidez ≤ 5.0).
 * **Sistema de Alertas:** Generación automática de notificaciones ante mediciones fuera de norma.
 * **Seguridad:** Autenticación de usuarios mediante **JWT** y encriptación **BCrypt**.
