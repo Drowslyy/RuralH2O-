@@ -1,4 +1,4 @@
-# main.py
+
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -7,9 +7,8 @@ import models
 import schemas
 from database import engine, get_db
 from auth import hash_password, verify_password, crear_token
-from validaciones import evaluar_nch409  # <-- NUEVO IMPORT
+from validaciones import evaluar_nch409
 
-# Crea las tablas automáticamente al iniciar
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="RuralH2O MVP - Iteración 2")
@@ -86,9 +85,8 @@ def crear_medicion(medicion: schemas.MedicionCreate, db: Session = Depends(get_d
     # 2. Evaluar según norma NCh 409
     resultado = evaluar_nch409(medicion.ph, medicion.cloro, medicion.turbidez)
 
-    # 3. Crear y guardar la medición con el veredicto
+    # 3. Crear y guardar la medición (la comunidad se hereda del punto)
     nueva = models.Medicion(
-        comunidad=medicion.comunidad,
         ph=medicion.ph,
         cloro=medicion.cloro,
         turbidez=medicion.turbidez,
@@ -100,7 +98,7 @@ def crear_medicion(medicion: schemas.MedicionCreate, db: Session = Depends(get_d
     db.commit()
     db.refresh(nueva)
 
-    # 4. Si la medición NO es apta, generar alertas automáticas (RF-06)
+    # 4. Si no es apta, generar alertas automáticas (RF-06)
     if not resultado["apta"]:
         for alerta_data in resultado["alertas_generadas"]:
             nueva_alerta = models.Alerta(
@@ -128,26 +126,15 @@ def listar_alertas(
     leida: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    Lista todas las alertas generadas por mediciones fuera de norma.
-    Parámetro opcional 'leida':
-        - /alertas/?leida=false → solo pendientes
-        - /alertas/?leida=true  → solo leídas
-        - /alertas/             → todas
-    """
     query = db.query(models.Alerta)
-
     if leida is not None:
         query = query.filter(models.Alerta.leida == leida)
-
     return query.order_by(models.Alerta.fecha.desc()).all()
 
 
 @app.patch("/alertas/{alerta_id}/leer", response_model=schemas.AlertaOut)
 def marcar_alerta_leida(alerta_id: int, db: Session = Depends(get_db)):
-    """Marca una alerta como leída."""
     alerta = db.query(models.Alerta).filter(models.Alerta.id == alerta_id).first()
-
     if not alerta:
         raise HTTPException(status_code=404, detail="Alerta no encontrada")
 

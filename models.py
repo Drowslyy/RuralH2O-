@@ -21,6 +21,7 @@ class PuntoMonitoreo(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(100), nullable=False)
     tipo_fuente = Column(String(50), nullable=False)
+    comunidad = Column(String(100), nullable=False)  # Cambios 26/04
     latitud = Column(Float, nullable=False)
     longitud = Column(Float, nullable=False)
 
@@ -31,7 +32,7 @@ class Medicion(Base):
     __tablename__ = "mediciones"
 
     id = Column(Integer, primary_key=True, index=True)
-    comunidad = Column(String(100), nullable=False)
+    # comunidad = Column(String(100), nullable=False) Eliminacion de comunidad 26/04
     ph = Column(Float, nullable=False)
     cloro = Column(Float, nullable=False)
     turbidez = Column(Float, nullable=False)

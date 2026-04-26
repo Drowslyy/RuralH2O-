@@ -11,7 +11,7 @@ from typing import Optional
 
 # ── Mediciones ────────────────────────────────────────────
 class MedicionBase(BaseModel):
-    comunidad : str
+    # comunidad : str Eliminada cambio 26/04
     ph        : float = Field(..., ge=0,  le=14)
     cloro     : float = Field(..., ge=0,  le=5)
     turbidez  : float = Field(..., ge=0)
@@ -34,6 +34,7 @@ class MedicionOut(MedicionBase): #Muestra los datos al usuarios
 class PuntoBase(BaseModel):
     nombre : str
     tipo_fuente : str
+    comunidad : str
     latitud : float
     longitud : float
 
