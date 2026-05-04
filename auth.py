@@ -5,10 +5,13 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import os
+from dotenv import load_dotenv
 
-#SECRET 
-SECRET_KEY = "ruralh2o-secret-aysen-2026"
-ALGORITHM  = "HS256"
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 TOKEN_EXPIRE_MINUTES = 60
 
 #Convirte una clave de facil acceso (1234) en una cadena ilegible

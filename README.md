@@ -72,3 +72,14 @@
 ### Iniciar Servidor
 ```bash
 uvicorn main:app --reload
+
+---
+
+## 🧪 Aseguramiento de Calidad (QA)
+
+En la **Semana 8**, el proyecto implementó una suite de pruebas automatizadas para garantizar la fiabilidad del motor de validación normativa.
+
+### Ejecución de Pruebas y Cobertura
+Para validar el sistema y generar el reporte de métricas, ejecute:
+```bash
+pytest --cov=. --cov-report=term-missing

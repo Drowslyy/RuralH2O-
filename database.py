@@ -5,9 +5,15 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import os
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
-#Connectividad a mysql (Credencial)
-DATABASE_URL = "mysql+pymysql://root:root1234@localhost:3306/ruralh2o"
+# Esto carga las variables del archivo .env
+load_dotenv()
+
+# Ahora la URL se lee del sistema, no está escrita aquí directamente
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 engine = create_engine(DATABASE_URL) #Motor de conexion usando las credenciales
 

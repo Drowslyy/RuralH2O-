@@ -1,30 +1,47 @@
-
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 import models
 import schemas
 from database import engine, get_db
-from auth import hash_password, verify_password, crear_token
+from auth import hash_password, verify_password, crear_token, verificar_token
 from validaciones import evaluar_nch409
 
+# Inicialización
 models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="RuralH2O MVP - Iteración 2")
-
-
-# ==========================================================
-# HOME
-# ==========================================================
-@app.get("/")
-def home():
-    return {"mensaje": "API RuralH2O operativa - Iteración 2"}
-
+app = FastAPI(title="Semana 8: Testing inicial y métricas")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 # ==========================================================
-# USUARIOS (RF-07)
+# SEGURIDAD (Dependencia de Usuario Actual)
 # ==========================================================
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    payload = verificar_token(token)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    
+    email: str = payload.get("sub")
+    usuario = db.query(models.Usuario).filter(models.Usuario.email == email).first()
+    
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Usuario no autorizado")
+    return usuario
+
+# ==========================================================
+# USUARIOS Y LOGIN (RF-07)
+# ==========================================================
+@app.post("/login", response_model=schemas.Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    usuario = db.query(models.Usuario).filter(models.Usuario.email == form_data.username).first()
+    
+    if not usuario or not verify_password(form_data.password, usuario.password):
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+    
+    token = crear_token({"sub": usuario.email, "rol": usuario.rol})
+    return {"access_token": token, "token_type": "bearer"}
+
 @app.post("/usuarios/", response_model=schemas.UsuarioOut)
 def registrar_usuario(usuario: schemas.UsuarioCreate, db: Session = Depends(get_db)):
     existe = db.query(models.Usuario).filter(models.Usuario.email == usuario.email).first()
@@ -42,102 +59,86 @@ def registrar_usuario(usuario: schemas.UsuarioCreate, db: Session = Depends(get_
     db.refresh(nuevo)
     return nuevo
 
-
-@app.post("/login", response_model=schemas.Token)
-def login(datos: schemas.LoginRequest, db: Session = Depends(get_db)):
-    usuario = db.query(models.Usuario).filter(models.Usuario.email == datos.email).first()
-    if not usuario or not verify_password(datos.password, usuario.password):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-
-    token = crear_token({"sub": usuario.email, "rol": usuario.rol})
-    return {"access_token": token, "token_type": "bearer"}
-
-
 # ==========================================================
-# PUNTOS DE MONITOREO (RF-01)
+# PUNTOS DE MONITOREO (RF-01 + RF-05)
 # ==========================================================
 @app.post("/puntos/", response_model=schemas.PuntoOut)
-def crear_punto(punto: schemas.PuntoCreate, db: Session = Depends(get_db)):
+def crear_punto(punto: schemas.PuntoCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+    # Protección de Rol: Solo Administradores pueden crear puntos
+    if current_user.rol != "admin":
+        raise HTTPException(status_code=403, detail="Permisos insuficientes para crear puntos")
+        
     nuevo = models.PuntoMonitoreo(**punto.model_dump())
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
     return nuevo
 
-
 @app.get("/puntos/", response_model=List[schemas.PuntoOut])
 def listar_puntos(db: Session = Depends(get_db)):
     return db.query(models.PuntoMonitoreo).all()
 
+# NUEVO: Endpoint para el mapa interactivo (Semana 9)
+@app.get("/mapa/puntos-calidad")
+def obtener_puntos_mapa(db: Session = Depends(get_db)):
+    puntos = db.query(models.PuntoMonitoreo).all()
+    resultado = []
+    for p in puntos:
+        ultima = db.query(models.Medicion).filter(models.Medicion.punto_id == p.id).order_by(models.Medicion.fecha.desc()).first()
+        color = "gray"
+        if ultima:
+            color = "green" if ultima.apta else "red"
+        resultado.append({
+            "id": p.id, "nombre": p.nombre, "lat": p.latitud, "lng": p.longitud, "color": color
+        })
+    return resultado
 
 # ==========================================================
 # MEDICIONES (RF-02 + RF-03)
 # ==========================================================
 @app.post("/mediciones/", response_model=schemas.MedicionOut)
-def crear_medicion(medicion: schemas.MedicionCreate, db: Session = Depends(get_db)):
-    # 1. Verificar que el punto exista
-    punto = db.query(models.PuntoMonitoreo).filter(
-        models.PuntoMonitoreo.id == medicion.punto_id
-    ).first()
+def crear_medicion(medicion: schemas.MedicionCreate, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
+    # Protección de Rol: Visualizadores no pueden subir datos
+    if current_user.rol == "visualizador":
+        raise HTTPException(status_code=403, detail="Tu rol solo permite visualizar datos")
+
+    punto = db.query(models.PuntoMonitoreo).filter(models.PuntoMonitoreo.id == medicion.punto_id).first()
     if not punto:
-        raise HTTPException(status_code=404, detail="Punto de monitoreo no encontrado")
+        raise HTTPException(status_code=404, detail="Punto no encontrado")
 
-    # 2. Evaluar según norma NCh 409
-    resultado = evaluar_nch409(medicion.ph, medicion.cloro, medicion.turbidez)
-
-    # 3. Crear y guardar la medición (la comunidad se hereda del punto)
+    res = evaluar_nch409(medicion.ph, medicion.cloro, medicion.turbidez)
     nueva = models.Medicion(
-        ph=medicion.ph,
-        cloro=medicion.cloro,
-        turbidez=medicion.turbidez,
-        punto_id=medicion.punto_id,
-        apta=resultado["apta"],
-        observaciones=resultado["observaciones"]
+        ph=medicion.ph, cloro=medicion.cloro, turbidez=medicion.turbidez,
+        punto_id=medicion.punto_id, apta=res["apta"], observaciones=res["observaciones"]
     )
     db.add(nueva)
     db.commit()
     db.refresh(nueva)
 
-    # 4. Si no es apta, generar alertas automáticas (RF-06)
-    if not resultado["apta"]:
-        for alerta_data in resultado["alertas_generadas"]:
-            nueva_alerta = models.Alerta(
-                medicion_id=nueva.id,
-                tipo=alerta_data["tipo"],
-                nivel=alerta_data["nivel"],
-                mensaje=alerta_data["mensaje"]
-            )
-            db.add(nueva_alerta)
+    if not res["apta"]:
+        for a in res["alertas_generadas"]:
+            db.add(models.Alerta(medicion_id=nueva.id, tipo=a["tipo"], nivel=a["nivel"], mensaje=a["mensaje"]))
         db.commit()
-
     return nueva
-
 
 @app.get("/mediciones/", response_model=List[schemas.MedicionOut])
 def listar_mediciones(db: Session = Depends(get_db)):
     return db.query(models.Medicion).all()
 
-
 # ==========================================================
 # ALERTAS (RF-06)
 # ==========================================================
 @app.get("/alertas/", response_model=List[schemas.AlertaOut])
-def listar_alertas(
-    leida: Optional[bool] = None,
-    db: Session = Depends(get_db)
-):
+def listar_alertas(leida: Optional[bool] = None, db: Session = Depends(get_db)):
     query = db.query(models.Alerta)
     if leida is not None:
         query = query.filter(models.Alerta.leida == leida)
     return query.order_by(models.Alerta.fecha.desc()).all()
 
-
 @app.patch("/alertas/{alerta_id}/leer", response_model=schemas.AlertaOut)
-def marcar_alerta_leida(alerta_id: int, db: Session = Depends(get_db)):
+def marcar_alerta_leida(alerta_id: int, db: Session = Depends(get_db), current_user: models.Usuario = Depends(get_current_user)):
     alerta = db.query(models.Alerta).filter(models.Alerta.id == alerta_id).first()
-    if not alerta:
-        raise HTTPException(status_code=404, detail="Alerta no encontrada")
-
+    if not alerta: raise HTTPException(status_code=404, detail="Alerta no encontrada")
     alerta.leida = True
     db.commit()
     db.refresh(alerta)
