@@ -7,22 +7,25 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
 
-# Esto carga las variables del archivo .env
+# Carga las variables del archivo .env
 load_dotenv()
 
-# Ahora la URL se lee del sistema, no está escrita aquí directamente
+# La URL se lee del sistema, no está escrita aquí directamente
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL) #Motor de conexion usando las credenciales
+# FIX: eliminado import duplicado de create_engine que existía en la línea 12
+engine = create_engine(DATABASE_URL)  # Motor de conexión usando las credenciales
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine) # Fabrica de sesiones (Consuta de API --> BD)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)  # Fábrica de sesiones
 
 Base = declarative_base()
 
-# Dependencia para obtener sesión de BD en cada endpoint
-def get_db(): # Asegura la conexion se abra para poder hacer peticiones y se cierra automaticamente al terminar (Evita fuga de memoria)
+
+# Dependencia para obtener sesión de BD en cada endpoint.
+# Asegura que la conexión se abra para poder hacer peticiones
+# y se cierra automáticamente al terminar (evita fuga de memoria).
+def get_db():
     db = SessionLocal()
     try:
         yield db

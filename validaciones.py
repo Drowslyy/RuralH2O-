@@ -1,58 +1,53 @@
-# validaciones.py
-# Módulo centralizado de validación según Norma NCh 409 (Agua Potable - Chile)
+# =============================
+#   Lógica NCh 409 - Validaciones
+# =============================
 
 def evaluar_nch409(ph: float, cloro: float, turbidez: float) -> dict:
     """
-    Evalúa una medición según la norma NCh 409.
-    Retorna un diccionario con:
-        - apta: True/False
-        - observaciones: texto con los parámetros fuera de rango
-        - alertas_generadas: lista de alertas a crear en la BD
+    Evalúa si los parámetros cumplen la norma chilena NCh 409.
+    Retorna veredicto, observaciones y alertas generadas.
+
+    Límites NCh 409:
+      pH        : 6.5 – 8.5       (advertencia si 6.0–6.5 o 8.5–9.0)
+      Cloro     : 0.2 – 2.0 mg/L  (advertencia si 2.0–3.0)
+      Turbidez  : <= 5 NTU         (advertencia si 5–10)
     """
-    observaciones = []
-    alertas_generadas = []
+    apta = True
+    observaciones_list = []
+    alertas = []
 
-    # --- Validación de pH ---
-    if ph < 6.5 or ph > 8.5:
-        # Nivel crítico si está muy fuera del rango
-        if ph < 6.0 or ph > 9.0:
-            nivel = "crítico"
-        else:
-            nivel = "advertencia"
+    # ── pH ──────────────────────────────────────────────
+    if ph < 6.0 or ph > 9.0:
+        apta = False
+        observaciones_list.append(f"pH {ph} fuera de rango crítico (6.0–9.0)")
+        alertas.append({"tipo": "pH", "nivel": "crítico", "mensaje": f"pH={ph} fuera de norma NCh 409"})
+    elif ph < 6.5 or ph > 8.5:
+        # FIX: advertencia se registra aunque apta=True (zona límite)
+        observaciones_list.append(f"pH {ph} en zona límite (advertencia)")
+        alertas.append({"tipo": "pH", "nivel": "advertencia", "mensaje": f"pH={ph} en zona límite NCh 409"})
 
-        tipo = "pH bajo" if ph < 6.5 else "pH alto"
-        mensaje = f"pH registrado: {ph}. Rango aceptable NCh 409: 6.5 - 8.5"
+    # ── Cloro ────────────────────────────────────────────
+    if cloro < 0.2 or cloro > 3.0:
+        apta = False
+        observaciones_list.append(f"Cloro {cloro} mg/L fuera de rango crítico (0.2–3.0)")
+        alertas.append({"tipo": "cloro", "nivel": "crítico", "mensaje": f"Cloro={cloro} mg/L fuera de norma NCh 409"})
+    elif cloro > 2.0:
+        observaciones_list.append(f"Cloro {cloro} mg/L en zona límite (advertencia)")
+        alertas.append({"tipo": "cloro", "nivel": "advertencia", "mensaje": f"Cloro={cloro} mg/L en zona límite NCh 409"})
 
-        observaciones.append(f"pH fuera de rango ({ph})")
-        alertas_generadas.append({
-            "tipo": tipo,
-            "nivel": nivel,
-            "mensaje": mensaje
-        })
-
-    # --- Validación de Cloro Residual ---
-    if cloro > 2.0:
-        observaciones.append(f"Cloro elevado ({cloro} mg/L)")
-        alertas_generadas.append({
-            "tipo": "Cloro alto",
-            "nivel": "crítico",
-            "mensaje": f"Cloro registrado: {cloro} mg/L. Máximo NCh 409: 2.0 mg/L"
-        })
-
-    # --- Validación de Turbidez ---
-    if turbidez > 5.0:
-        observaciones.append(f"Turbidez elevada ({turbidez} NTU)")
-        alertas_generadas.append({
-            "tipo": "Turbidez crítica",
-            "nivel": "crítico",
-            "mensaje": f"Turbidez registrada: {turbidez} NTU. Máximo NCh 409: 5.0 NTU"
-        })
-
-    # --- Resultado Final ---
-    apta = len(observaciones) == 0
+    # ── Turbidez ─────────────────────────────────────────
+    if turbidez > 10:
+        apta = False
+        observaciones_list.append(f"Turbidez {turbidez} NTU fuera de rango crítico (>10)")
+        alertas.append({"tipo": "turbidez", "nivel": "crítico", "mensaje": f"Turbidez={turbidez} NTU fuera de norma NCh 409"})
+    elif turbidez > 5:
+        observaciones_list.append(f"Turbidez {turbidez} NTU en zona límite (advertencia)")
+        alertas.append({"tipo": "turbidez", "nivel": "advertencia", "mensaje": f"Turbidez={turbidez} NTU en zona límite NCh 409"})
 
     return {
-        "apta": apta,
-        "observaciones": "; ".join(observaciones) if observaciones else None,
-        "alertas_generadas": alertas_generadas
+        "apta":              apta,
+        "observaciones":     "; ".join(observaciones_list) if observaciones_list else "Cumple NCh 409",
+        "alertas_generadas": alertas,
     }
+
+    
