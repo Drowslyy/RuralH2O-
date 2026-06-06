@@ -5,13 +5,16 @@
 # ============================================================
 
 import os
+import tempfile
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # ── Base de datos en memoria (aislada, no toca tu BD real) ──
-TEST_DB_URL = "sqlite:///./test_s9_temp.db"
+# FIX: ruta cross-platform (Windows y Linux) usando tempfile.gettempdir()
+_db_path = os.path.join(tempfile.gettempdir(), "test_s9_temp.db").replace("\\", "/")
+TEST_DB_URL = "sqlite:///" + _db_path
 os.environ["DATABASE_URL"] = TEST_DB_URL
 
 from database import Base, get_db
@@ -29,16 +32,17 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
-
-
 # ── Fixture: BD limpia antes de cada test ───────────────────
+# FIX: el override se establece DENTRO del fixture para que no pise
+# el override de otros archivos de test cuando se corre la suite completa.
 @pytest.fixture(autouse=True)
 def limpiar_bd():
     """Crea todas las tablas al inicio y las borra al finalizar cada test."""
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.create_all(bind=engine_test)
     yield
     Base.metadata.drop_all(bind=engine_test)
+    app.dependency_overrides.pop(get_db, None)
 
 
 client = TestClient(app)

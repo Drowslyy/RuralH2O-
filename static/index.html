@@ -1,22 +1,865 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <title>RuralH2O - Mapa de Monitoreo</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RuralH₂O — Mapa de Calidad de Agua</title>
 
-    <style>
-        #map { height: 600px; width: 100%; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
-        h1 { color: #00467f; text-align: center; }
-    </style>
+  <!-- Leaflet.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet.heat (mapa de calor) -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <style>
+    /* ── Reset y base ─────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1923; color: #e2e8f0;
+      height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* ── Topbar ───────────────────────────────────────── */
+    #topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #0d1b2a; padding: 9px 16px;
+      border-bottom: 1px solid #1e3a5f; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.4); gap: 12px;
+    }
+    #topbar h1 { font-size: 1rem; font-weight: 700; color: #38bdf8; white-space: nowrap; }
+    #topbar h1 span { color: #64748b; font-weight: 400; font-size: .8rem; margin-left: 6px; }
+
+    #topbar-derecha { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+    #badge-alertas {
+      background: #ef4444; color: #fff; font-size: .72rem; font-weight: 700;
+      padding: 3px 10px; border-radius: 999px; display: none; white-space: nowrap;
+    }
+    #timer-refresh {
+      font-size: .75rem; color: #64748b; white-space: nowrap; cursor: pointer;
+      padding: 4px 10px; border-radius: 6px; border: 1px solid #1e3a5f;
+      background: #0d1b2a; transition: border-color .2s;
+    }
+    #timer-refresh:hover { border-color: #38bdf8; color: #38bdf8; }
+
+    #info-usuario {
+      font-size: .75rem; color: #64748b; white-space: nowrap;
+      display: flex; align-items: center; gap: 6px;
+    }
+    #info-usuario .rol-badge {
+      padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .4px;
+    }
+    .rol-admin       { background: #1e3a5f; color: #38bdf8; }
+    .rol-registrador { background: #1a2e45; color: #34d399; }
+    .rol-visualizador{ background: #1a2e45; color: #94a3b8; }
+
+    #btn-mediciones {
+      font-size: .75rem; color: #34d399; white-space: nowrap; cursor: pointer;
+      padding: 4px 10px; border-radius: 6px; border: 1px solid #166534;
+      background: #0d1b2a; transition: all .2s; text-decoration: none;
+      display: none;
+    }
+    #btn-mediciones:hover { background: #14532d; color: #4ade80; }
+
+    #btn-logout {
+      font-size: .75rem; color: #f87171; white-space: nowrap; cursor: pointer;
+      padding: 4px 10px; border-radius: 6px; border: 1px solid #7f1d1d;
+      background: #0d1b2a; transition: all .2s;
+    }
+    #btn-logout:hover { background: #7f1d1d; color: #fca5a5; }
+
+    /* ── Layout principal ─────────────────────────────── */
+    #layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Panel izquierdo — filtros ────────────────────── */
+    #panel-filtros {
+      width: 255px; flex-shrink: 0;
+      background: #0d1b2a; border-right: 1px solid #1e3a5f;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #panel-filtros > header {
+      padding: 12px 15px 8px;
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: #64748b;
+      border-bottom: 1px solid #1e3a5f; flex-shrink: 0;
+    }
+    .filtro-seccion {
+      padding: 10px 13px 8px; border-bottom: 1px solid #1a2e45;
+    }
+    .filtro-label {
+      display: block; font-size: .68rem; font-weight: 700;
+      color: #64748b; margin-bottom: 7px;
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+
+    /* Chips de estado */
+    #chips-estado { display: flex; flex-wrap: wrap; gap: 5px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 999px; font-size: .76rem; font-weight: 600;
+      cursor: pointer; border: 2px solid transparent; transition: all .2s;
+      background: #1a2e45; color: #64748b; user-select: none;
+    }
+    .chip:hover { background: #1e3a5f; }
+    .chip.activo { border-color: currentColor; background: rgba(255,255,255,.06); }
+    .chip-todos  { color: #94a3b8; }
+    .chip-gray   { color: #9ca3af; }
+    .chip-green  { color: #4ade80; }
+    .chip-yellow { color: #facc15; }
+    .chip-red    { color: #f87171; }
+
+    /* Selects */
+    .filtro-select {
+      width: 100%; background: #1a2e45; border: 1px solid #2d4f6e;
+      color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: .8rem;
+      appearance: none; cursor: pointer;
+    }
+    .filtro-select:focus { outline: none; border-color: #38bdf8; }
+
+    /* Botones fondo filtros */
+    #filtros-botones { display: flex; flex-direction: column; gap: 7px; padding: 12px 13px; }
+    .btn-accion {
+      padding: 8px 10px; border-radius: 7px; border: 1px solid #2d4f6e;
+      background: #1a2e45; color: #94a3b8; font-size: .78rem; cursor: pointer;
+      transition: all .2s; text-align: center; font-weight: 600;
+    }
+    .btn-accion:hover { background: #2d4f6e; color: #e2e8f0; }
+    .btn-accion.peligro:hover { background: #1e3a5f; border-color: #38bdf8; color: #38bdf8; }
+
+    #conteo {
+      padding: 6px 13px 10px;
+      font-size: .76rem; color: #475569; text-align: center;
+    }
+
+    /* ── Mapa ─────────────────────────────────────────── */
+    #mapa { flex: 1; min-width: 0; position: relative; }
+
+    /* Estilos controles Leaflet (geoloc + heatmap) */
+    .ctrl-icono {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; font-size: 1rem;
+      background: white; border-radius: 4px;
+      cursor: pointer; border: none;
+      box-shadow: 0 1px 5px rgba(0,0,0,.4);
+      text-decoration: none; color: #333;
+      transition: background .15s;
+    }
+    .ctrl-icono:hover { background: #f4f4f4; }
+    .ctrl-icono.activo { background: #bfdbfe; }
+
+    /* ── Panel derecho — detalle ───────────────────────── */
+    #panel-detalle {
+      width: 0; flex-shrink: 0; overflow: hidden;
+      background: #0d1b2a; border-left: 1px solid #1e3a5f;
+      display: flex; flex-direction: column;
+      transition: width .28s ease;
+    }
+    #panel-detalle.abierto { width: 295px; overflow: visible; }
+    #panel-detalle-inner { width: 295px; display: flex; flex-direction: column; height: 100%; }
+
+    #panel-detalle header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid #1e3a5f; flex-shrink: 0;
+    }
+    #panel-detalle header span {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: #64748b;
+    }
+    #btn-cerrar-detalle {
+      background: none; border: none; color: #64748b;
+      font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 2px 4px;
+    }
+    #btn-cerrar-detalle:hover { color: #e2e8f0; }
+
+    #contenido-detalle { padding: 12px 14px; overflow-y: auto; flex: 1; }
+
+    .d-nombre  { font-size: .98rem; font-weight: 700; color: #e2e8f0; margin-bottom: 3px; line-height: 1.3; }
+    .d-subtitulo { font-size: .76rem; color: #64748b; margin-bottom: 12px; }
+
+    .badge-color {
+      display: inline-block; padding: 3px 12px; border-radius: 999px;
+      font-size: .72rem; font-weight: 700; margin-bottom: 12px;
+    }
+    .badge-gray   { background: #374151; color: #9ca3af; }
+    .badge-green  { background: #14532d; color: #4ade80; }
+    .badge-yellow { background: #713f12; color: #facc15; }
+    .badge-red    { background: #7f1d1d; color: #f87171; }
+
+    .d-seccion {
+      background: #1a2e45; border-radius: 8px; padding: 10px 12px;
+      margin-bottom: 9px;
+    }
+    .d-sec-titulo {
+      font-size: .66rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .7px; color: #64748b; margin-bottom: 8px;
+    }
+    .d-fila {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: .8rem; margin-bottom: 5px; gap: 6px;
+    }
+    .d-fila:last-child { margin-bottom: 0; }
+    .d-llave { color: #94a3b8; flex-shrink: 0; }
+    .d-valor { color: #e2e8f0; font-weight: 600; text-align: right; }
+    .ok   { color: #4ade80; }
+    .warn { color: #facc15; }
+    .crit { color: #f87171; }
+
+    /* Barras de parámetros */
+    .param-wrap { margin-bottom: 9px; }
+    .param-wrap:last-child { margin-bottom: 0; }
+    .param-cabecera { display: flex; justify-content: space-between; font-size: .78rem; margin-bottom: 3px; }
+    .param-nombre { color: #94a3b8; }
+    .barra-bg { background: #0d1b2a; border-radius: 3px; height: 6px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 3px; transition: width .5s; }
+    .barra-ok   { background: #4ade80; }
+    .barra-warn { background: #facc15; }
+    .barra-crit { background: #f87171; }
+    .param-rango { font-size: .65rem; color: #475569; margin-top: 2px; }
+
+    /* Alertas */
+    .alerta-item {
+      padding: 6px 9px; border-radius: 6px; font-size: .76rem;
+      margin-bottom: 5px; border-left: 3px solid; line-height: 1.4;
+    }
+    .alerta-item:last-child { margin-bottom: 0; }
+    .alerta-critico      { background: rgba(239,68,68,.1);  border-color: #ef4444; color: #fca5a5; }
+    .alerta-advertencia  { background: rgba(234,179,8,.08); border-color: #ca8a04; color: #fde68a; }
+
+    /* Gráfico histórico */
+    #chart-wrap { min-height: 60px; }
+    .chart-msg { font-size: .75rem; color: #475569; text-align: center; padding: 12px 0; }
+
+    /* ── Leyenda Leaflet ──────────────────────────────── */
+    .leyenda {
+      background: rgba(13,27,42,.93); padding: 9px 12px; border-radius: 8px;
+      font-size: .76rem; line-height: 1.9; color: #94a3b8;
+      border: 1px solid #1e3a5f;
+    }
+    .leyenda b { display: block; font-size: .65rem; text-transform: uppercase;
+      letter-spacing: .8px; color: #64748b; margin-bottom: 3px; }
+    .ley-fila  { display: flex; align-items: center; gap: 7px; }
+    .ley-dot   { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,.2); }
+
+    /* Leaflet popup oscuro */
+    .leaflet-popup-content-wrapper {
+      background: #1e3a5f; color: #e2e8f0;
+      border-radius: 8px; border: 1px solid #2d4f6e;
+      box-shadow: 0 4px 18px rgba(0,0,0,.5);
+    }
+    .leaflet-popup-tip { background: #1e3a5f; }
+    .leaflet-popup-content { font-size: .8rem; line-height: 1.5; }
+
+    /* ── Toast ────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: #1e3a5f; border: 1px solid #38bdf8; color: #e2e8f0;
+      padding: 8px 18px; border-radius: 8px; font-size: .8rem;
+      opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 9999;
+      white-space: nowrap;
+    }
+    #toast.visible { opacity: 1; }
+  </style>
 </head>
 <body>
-    <h1>Mapa Interactivo RuralH2O</h1>
-    <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="mapa.js"></script> </body>
+<!-- ── Topbar ──────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>RuralH₂O — Calidad del Agua <span>Región de Aysén · NCh 409</span></h1>
+  <div id="topbar-derecha">
+    <span id="badge-alertas">⚠ Alertas activas</span>
+    <span id="timer-refresh" title="Haz clic para actualizar ahora">↻ --:--</span>
+    <a id="btn-mediciones" href="mediciones.html" title="Registrar nueva medición">＋ Medición</a>
+    <div id="info-usuario">
+      <span id="lbl-email"></span>
+      <span id="lbl-rol" class="rol-badge"></span>
+    </div>
+    <button id="btn-logout" title="Cerrar sesión">⏻ Salir</button>
+  </div>
+</div>
+
+<!-- ── Layout ──────────────────────────────────────────── -->
+<div id="layout">
+
+  <!-- ── Filtros ── -->
+  <aside id="panel-filtros">
+    <header>Filtros</header>
+
+    <div class="filtro-seccion">
+      <span class="filtro-label">Estado del agua</span>
+      <div id="chips-estado">
+        <div class="chip chip-todos activo" data-color="">🗺 Todos</div>
+        <div class="chip chip-gray"         data-color="gray">⚫ Sin datos</div>
+        <div class="chip chip-green"        data-color="green">🟢 Apta</div>
+        <div class="chip chip-yellow"       data-color="yellow">🟡 En límite</div>
+        <div class="chip chip-red"          data-color="red">🔴 No apta</div>
+      </div>
+    </div>
+
+    <div class="filtro-seccion">
+      <span class="filtro-label">Tipo de fuente</span>
+      <select id="sel-tipo" class="filtro-select">
+        <option value="">— Todos —</option>
+        <option value="pozo">🕳 Pozo</option>
+        <option value="vertiente">💧 Vertiente</option>
+        <option value="río">🏞 Río</option>
+      </select>
+    </div>
+
+    <div class="filtro-seccion">
+      <span class="filtro-label">Comunidad</span>
+      <select id="sel-comunidad" class="filtro-select">
+        <option value="">— Todas —</option>
+      </select>
+    </div>
+
+    <div id="filtros-botones">
+      <button class="btn-accion" id="btn-exportar">📥 Exportar CSV</button>
+      <button class="btn-accion" id="btn-exportar-pdf">📄 Descargar PDF filtrado</button>
+      <button class="btn-accion peligro" id="btn-reset">↺ Limpiar filtros</button>
+    </div>
+    <div id="conteo">Cargando puntos…</div>
+  </aside>
+
+  <!-- ── Mapa ── -->
+  <div id="mapa"></div>
+
+  <!-- ── Detalle ── -->
+  <aside id="panel-detalle">
+    <div id="panel-detalle-inner">
+      <header>
+        <span>Detalle del punto</span>
+        <button id="btn-cerrar-detalle" title="Cerrar">✕</button>
+      </header>
+      <div id="contenido-detalle">
+        <p class="chart-msg" style="margin-top:30px">Selecciona un punto en el mapa</p>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+// ── Autenticación — verificar sesión al cargar ────────────
+(function() {
+  const token = sessionStorage.getItem("token");
+  if (!token) { window.location.replace("login.html"); return; }
+
+  // Mostrar info del usuario en el topbar
+  const email = sessionStorage.getItem("user_email") || "";
+  const rol   = sessionStorage.getItem("user_rol")   || "";
+
+  document.getElementById("lbl-email").textContent = email;
+  const lblRol = document.getElementById("lbl-rol");
+  lblRol.textContent = rol;
+  lblRol.className = `rol-badge rol-${rol}`;
+
+  // Mostrar botón de mediciones solo a admin y registrador
+  if (rol === "admin" || rol === "registrador") {
+    document.getElementById("btn-mediciones").style.display = "inline-flex";
+  }
+})();
+
+// Logout
+document.getElementById("btn-logout").addEventListener("click", () => {
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("user_email");
+  sessionStorage.removeItem("user_rol");
+  window.location.replace("login.html");
+});
+
+// ── Config ────────────────────────────────────────────────
+const API_BASE        = "http://localhost:8000";
+const REFRESH_SEG     = 300;  // auto-refresh cada 5 min
+const AYSEN_CENTER    = [-45.57, -72.07];
+const AYSEN_BOUNDS    = L.latLngBounds(L.latLng(-49.8, -76.5), L.latLng(-43.3, -70.5));
+const COLOR_MAP = {
+  gray:   { hex: "#9ca3af", label: "Sin datos"  },
+  green:  { hex: "#4ade80", label: "Apta"        },
+  yellow: { hex: "#facc15", label: "En límite"   },
+  red:    { hex: "#f87171", label: "No apta"     },
+};
+const NCH = {
+  ph:       { ok: [6.5, 8.5], warn: [6.0, 9.0],  min: 0,  max: 14, unidad: "",      rango: "6.5 – 8.5" },
+  cloro:    { ok: [0.2, 2.0], warn: [0.0, 3.0],  min: 0,  max: 5,  unidad: " mg/L", rango: "0.2 – 2.0 mg/L" },
+  turbidez: { ok: [0,   5.0], warn: [0,  10.0],  min: 0,  max: 20, unidad: " NTU",  rango: "≤ 5 NTU" },
+};
+
+// ── Estado global ─────────────────────────────────────────
+let datosPuntos = [];
+let marcadores  = {};
+let heatLayer   = null;
+let modoHeat    = false;
+const filtros   = { color: "", tipo: "", comunidad: "" };
+
+// ── Mapa Leaflet ──────────────────────────────────────────
+const mapa = L.map("mapa", {
+  center: AYSEN_CENTER, zoom: 9, minZoom: 7, maxZoom: 17,
+  maxBounds: AYSEN_BOUNDS, maxBoundsViscosity: 0.85,
+});
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(mapa);
+
+// ── Leyenda ───────────────────────────────────────────────
+const leyenda = L.control({ position: "bottomright" });
+leyenda.onAdd = () => {
+  const d = L.DomUtil.create("div", "leyenda");
+  d.innerHTML = `<b>Estado NCh 409</b>
+    <div class="ley-fila"><span class="ley-dot" style="background:#9ca3af"></span>Sin mediciones</div>
+    <div class="ley-fila"><span class="ley-dot" style="background:#4ade80"></span>Agua apta</div>
+    <div class="ley-fila"><span class="ley-dot" style="background:#facc15"></span>En zona límite</div>
+    <div class="ley-fila"><span class="ley-dot" style="background:#f87171"></span>No apta (crítico)</div>`;
+  return d;
+};
+leyenda.addTo(mapa);
+
+// ── Control: Geolocalización ──────────────────────────────
+const ctrlGeo = L.control({ position: "topleft" });
+ctrlGeo.onAdd = () => {
+  const wrap = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+  const btn  = L.DomUtil.create("a", "ctrl-icono", wrap);
+  btn.title = "Mi ubicación"; btn.href = "#"; btn.textContent = "📍";
+  L.DomEvent.on(btn, "click", L.DomEvent.stop);
+  L.DomEvent.on(btn, "click", () => {
+    if (!navigator.geolocation) { mostrarToast("Tu navegador no soporta geolocalización"); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        mapa.setView([pos.coords.latitude, pos.coords.longitude], 13);
+        L.marker([pos.coords.latitude, pos.coords.longitude], {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [18, 18], iconAnchor: [9, 9],
+            html: `<div style="width:18px;height:18px;border-radius:50%;background:#38bdf8;
+                     border:3px solid white;box-shadow:0 0 0 4px rgba(56,189,248,.35)"></div>`,
+          }),
+        }).addTo(mapa).bindPopup("📍 Mi ubicación").openPopup();
+      },
+      () => mostrarToast("No se pudo obtener la ubicación")
+    );
+  });
+  return wrap;
+};
+ctrlGeo.addTo(mapa);
+
+// ── Control: Toggle Heatmap ───────────────────────────────
+const ctrlHeat = L.control({ position: "topleft" });
+ctrlHeat.onAdd = () => {
+  const wrap = L.DomUtil.create("div", "leaflet-bar leaflet-control");
+  const btn  = L.DomUtil.create("a", "ctrl-icono", wrap);
+  btn.title = "Mapa de calor"; btn.href = "#"; btn.id = "btn-heat"; btn.textContent = "🌡";
+  L.DomEvent.on(btn, "click", L.DomEvent.stop);
+  L.DomEvent.on(btn, "click", () => toggleHeatmap(btn));
+  return wrap;
+};
+ctrlHeat.addTo(mapa);
+
+// ── Marcadores ────────────────────────────────────────────
+function crearIcono(color) {
+  const hex = COLOR_MAP[color]?.hex || "#9ca3af";
+  return L.divIcon({
+    className: "",
+    iconSize: [22, 22], iconAnchor: [11, 11],
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:${hex};
+             border:3px solid rgba(255,255,255,.55);
+             box-shadow:0 0 0 3px ${hex}55,0 2px 6px rgba(0,0,0,.5)"></div>`,
+  });
+}
+
+// ── Carga de datos ────────────────────────────────────────
+async function cargarPuntos() {
+  try {
+    const res = await fetch(`${API_BASE}/mapa/puntos-calidad`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    datosPuntos = await res.json();
+    await cargarComunidades();
+    renderizarMarcadores();
+    iniciarContador();
+    mostrarToast(`✔ ${datosPuntos.length} punto(s) cargados`);
+  } catch (e) {
+    mostrarToast("⚠ No se pudo conectar con la API. ¿Está corriendo FastAPI?", 6000);
+    console.error(e);
+  }
+}
+
+async function cargarComunidades() {
+  try {
+    const res  = await fetch(`${API_BASE}/mapa/comunidades`);
+    const lista = await res.json();
+    const sel  = document.getElementById("sel-comunidad");
+    // Limpiar opciones anteriores (salvo la primera)
+    while (sel.options.length > 1) sel.remove(1);
+    lista.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c; opt.textContent = c;
+      sel.appendChild(opt);
+    });
+  } catch (_) {}
+}
+
+// ── Renderizado ───────────────────────────────────────────
+function puntosFiltrados() {
+  return datosPuntos.filter(p => {
+    if (filtros.color     && p.color !== filtros.color)                              return false;
+    if (filtros.tipo      && p.tipo_fuente?.toLowerCase() !== filtros.tipo.toLowerCase()) return false;
+    if (filtros.comunidad && p.comunidad !== filtros.comunidad)                      return false;
+    return true;
+  });
+}
+
+function renderizarMarcadores() {
+  // Limpiar capa de calor si está activa
+  if (modoHeat && heatLayer) { mapa.removeLayer(heatLayer); heatLayer = null; modoHeat = false; }
+  document.getElementById("btn-heat")?.classList.remove("activo");
+
+  // Limpiar marcadores anteriores
+  Object.values(marcadores).forEach(m => mapa.removeLayer(m));
+  marcadores = {};
+
+  const visibles = puntosFiltrados();
+  let tieneAlertas = false;
+
+  visibles.forEach(p => {
+    const m = L.marker([p.lat, p.lng], { icon: crearIcono(p.color) });
+    m.addTo(mapa);
+    m.on("click", () => { mapa.stopPropagation; mostrarDetalle(p); });
+    marcadores[p.id] = m;
+    if (p.medicion?.alertas?.length) tieneAlertas = true;
+  });
+
+  document.getElementById("badge-alertas").style.display = tieneAlertas ? "inline" : "none";
+  document.getElementById("conteo").textContent =
+    `${visibles.length} de ${datosPuntos.length} puntos`;
+}
+
+// ── Heatmap ───────────────────────────────────────────────
+function toggleHeatmap(btn) {
+  const intensidad = { gray: 0.05, green: 0.15, yellow: 0.55, red: 1.0 };
+
+  if (modoHeat) {
+    mapa.removeLayer(heatLayer); heatLayer = null; modoHeat = false;
+    btn.classList.remove("activo");
+    renderizarMarcadores();
+    mostrarToast("📍 Vista de marcadores restaurada");
+  } else {
+    Object.values(marcadores).forEach(m => mapa.removeLayer(m));
+    marcadores = {};
+    const puntos = puntosFiltrados().map(p => [p.lat, p.lng, intensidad[p.color] ?? 0.1]);
+    heatLayer = L.heatLayer(puntos, {
+      radius: 40, blur: 25, maxZoom: 13,
+      gradient: { 0.15: "#4ade80", 0.55: "#facc15", 1.0: "#f87171" },
+    }).addTo(mapa);
+    modoHeat = true;
+    btn.classList.add("activo");
+    mostrarToast("🌡 Mapa de calor activado — haz clic de nuevo para desactivar");
+  }
+}
+
+// ── Panel de detalle ──────────────────────────────────────
+async function mostrarDetalle(p) {
+  const panel = document.getElementById("panel-detalle");
+  panel.classList.add("abierto");
+
+  const c = COLOR_MAP[p.color] || COLOR_MAP.gray;
+  const m = p.medicion;
+
+  let html = `
+    <div class="d-nombre">${p.nombre}</div>
+    <div class="d-subtitulo">${iconoTipo(p.tipo_fuente)} ${p.tipo_fuente} &middot; ${p.comunidad}</div>
+    <span class="badge-color badge-${p.color}">${c.label}</span>
+
+    <div class="d-seccion">
+      <div class="d-sec-titulo">📍 Información del punto</div>
+      <div class="d-fila">
+        <span class="d-llave">Creado el</span>
+        <span class="d-valor">${p.fecha_creacion || "—"}</span>
+      </div>
+      <div class="d-fila">
+        <span class="d-llave">Coordenadas</span>
+        <span class="d-valor" style="font-size:.73rem">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>
+      </div>
+    </div>
+  `;
+
+  if (m) {
+    const phCls   = claseParam("ph",       m.ph);
+    const cloCls  = claseParam("cloro",    m.cloro);
+    const turCls  = claseParam("turbidez", m.turbidez);
+    const diasCls = m.dias_desde > 30 ? "crit" : m.dias_desde > 7 ? "warn" : "ok";
+
+    html += `
+    <div class="d-seccion">
+      <div class="d-sec-titulo">🕐 Última medición</div>
+      <div class="d-fila">
+        <span class="d-llave">Fecha</span>
+        <span class="d-valor">${m.fecha}</span>
+      </div>
+      <div class="d-fila">
+        <span class="d-llave">Antigüedad</span>
+        <span class="d-valor ${diasCls}">${diasTexto(m.dias_desde)}</span>
+      </div>
+      <div class="d-fila">
+        <span class="d-llave">Apta para consumo</span>
+        <span class="d-valor ${m.apta ? "ok" : "crit"}">${m.apta ? "✔ Sí" : "✘ No"}</span>
+      </div>
+      <div class="d-fila" style="align-items:flex-start">
+        <span class="d-llave">Obs.</span>
+        <span class="d-valor" style="font-size:.72rem;max-width:160px">${m.observaciones}</span>
+      </div>
+    </div>
+
+    <div class="d-seccion">
+      <div class="d-sec-titulo">🧪 Parámetros NCh 409</div>
+      ${barraParam("pH",       m.ph,       "ph",       phCls)}
+      ${barraParam("Cloro",    m.cloro,    "cloro",    cloCls)}
+      ${barraParam("Turbidez", m.turbidez, "turbidez", turCls)}
+    </div>`;
+
+    if (m.alertas?.length) {
+      html += `<div class="d-seccion">
+        <div class="d-sec-titulo">🔔 Alertas activas (${m.alertas.length})</div>`;
+      m.alertas.forEach(a => {
+        html += `<div class="alerta-item alerta-${a.nivel}">
+          <strong>${a.tipo}</strong> — ${a.mensaje}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Sección del gráfico (se rellena async abajo)
+    html += `<div class="d-seccion">
+      <div class="d-sec-titulo">📈 Historial de mediciones</div>
+      <div id="chart-wrap"><p class="chart-msg">Cargando historial…</p></div>
+    </div>`;
+
+  } else {
+    html += `<div style="text-align:center;padding:22px 0;color:#475569">
+      <div style="font-size:2.2rem;margin-bottom:8px">📭</div>
+      <div style="font-size:.85rem">Sin mediciones registradas</div>
+    </div>`;
+  }
+
+  document.getElementById("contenido-detalle").innerHTML = html;
+
+  // Cargar historial async si tiene mediciones
+  if (m) {
+    try {
+      const res  = await fetch(`${API_BASE}/mapa/historial/${p.id}?n=10`);
+      const hist = await res.json();
+      const wrap = document.getElementById("chart-wrap");
+      if (wrap) {
+        wrap.innerHTML = hist.length >= 2
+          ? miniChart(hist)
+          : `<p class="chart-msg">Necesita al menos 2 mediciones para mostrar el gráfico</p>`;
+      }
+    } catch (_) {
+      const wrap = document.getElementById("chart-wrap");
+      if (wrap) wrap.innerHTML = `<p class="chart-msg">No se pudo cargar el historial</p>`;
+    }
+  }
+}
+
+// ── Mini gráfico SVG ──────────────────────────────────────
+function miniChart(datos) {
+  const W = 255, H = 95;
+  const PAD = { top: 8, right: 6, bottom: 22, left: 6 };
+  const iW  = W - PAD.left - PAD.right;
+  const iH  = H - PAD.top  - PAD.bottom;
+  const n   = datos.length;
+  const series = [
+    { key: "ph",       color: "#60a5fa", label: "pH"       },
+    { key: "cloro",    color: "#34d399", label: "Cloro"    },
+    { key: "turbidez", color: "#fb923c", label: "Turbidez" },
+  ];
+  function toPath(key) {
+    const vals = datos.map(d => d[key]);
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+    return vals.map((v, i) => {
+      const x = PAD.left + (n === 1 ? iW/2 : (i/(n-1))*iW);
+      const y = PAD.top  + iH - ((v-mn)/rng)*iH;
+      return `${i===0?"M":"L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+  }
+  const paths = series.map(s =>
+    `<path d="${toPath(s.key)}" stroke="${s.color}" stroke-width="1.8" fill="none" stroke-linejoin="round"/>`
+  ).join("");
+  const dots = series.map(s => {
+    const vals = datos.map(d => d[s.key]);
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+    return [0, n-1].map(i => {
+      const v = vals[i];
+      const x = PAD.left + (n===1?iW/2:(i/(n-1))*iW);
+      const y = PAD.top  + iH - ((v-mn)/rng)*iH;
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${s.color}"/>`;
+    }).join("");
+  }).join("");
+  const xL0 = `<text x="${PAD.left}" y="${H-5}" font-size="8" fill="#475569">${datos[0].fecha}</text>`;
+  const xLN = `<text x="${W-PAD.right}" y="${H-5}" font-size="8" fill="#475569" text-anchor="end">${datos[n-1].fecha}</text>`;
+  const ley  = series.map((s,i) =>
+    `<text x="${i*83}" y="${H+14}" font-size="8.5" fill="${s.color}">-- ${s.label}</text>`
+  ).join("");
+  return `<svg viewBox="0 0 ${W} ${H+18}" style="width:100%;overflow:visible;display:block">
+    <rect x="${PAD.left}" y="${PAD.top}" width="${iW}" height="${iH}" fill="#0d1b2a" rx="3"/>
+    ${paths}${dots}${xL0}${xLN}
+    <g transform="translate(${PAD.left},0)">${ley}</g>
+  </svg>`;
+}
+
+// ── Exportar PDF filtrado ─────────────────────────────────
+function exportarPDFFiltrado() {
+  const visibles = puntosFiltrados();
+  if (!visibles.length) { mostrarToast("No hay puntos visibles con los filtros actuales"); return; }
+  const params = new URLSearchParams();
+  if (filtros.color)     params.set("color",      filtros.color);
+  if (filtros.tipo)      params.set("tipo_fuente", filtros.tipo);
+  if (filtros.comunidad) params.set("comunidad",   filtros.comunidad);
+  const url = API_BASE + "/reporte-mapa.pdf" + (params.toString() ? "?" + params.toString() : "");
+  window.open(url, "_blank");
+}
+
+// ── Exportar CSV ──────────────────────────────────────────
+function exportarCSV() {
+  const visibles = puntosFiltrados();
+  if (!visibles.length) { mostrarToast("No hay puntos para exportar con los filtros actuales"); return; }
+  const cab = ["ID","Nombre","Tipo","Comunidad","Lat","Lng","Estado",
+               "Fecha Creacion","Ultima Medicion","Dias Desde",
+               "pH","Cloro","Turbidez","Apta","Observaciones"];
+  const filas = visibles.map(p => {
+    const m = p.medicion;
+    return [
+      p.id, p.nombre, p.tipo_fuente, p.comunidad, p.lat, p.lng,
+      COLOR_MAP[p.color]?.label || p.color,
+      p.fecha_creacion,
+      m ? m.fecha : "", m ? m.dias_desde : "",
+      m ? m.ph : "", m ? m.cloro : "", m ? m.turbidez : "",
+      m ? (m.apta ? "Si" : "No") : "",
+      m ? m.observaciones : "",
+    ];
+  });
+  const csv  = [cab, ...filas]
+    .map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url;
+  a.download = `ruralh2o_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  mostrarToast(`Exportado -- ${visibles.length} punto(s)`);
+}
+
+// ── Auto-refresco ─────────────────────────────────────────
+let timerSeg  = REFRESH_SEG;
+let timerInvl = null;
+
+function iniciarContador() {
+  clearInterval(timerInvl);
+  timerSeg = REFRESH_SEG;
+  actualizarTimerUI();
+  timerInvl = setInterval(() => {
+    timerSeg--;
+    if (timerSeg <= 0) { cargarPuntos(); return; }
+    actualizarTimerUI();
+  }, 1000);
+}
+
+function actualizarTimerUI() {
+  const min = Math.floor(timerSeg / 60);
+  const seg = timerSeg % 60;
+  document.getElementById("timer-refresh").textContent =
+    `Actualiza en ${min}:${seg.toString().padStart(2, "0")}`;
+}
+
+document.getElementById("timer-refresh").addEventListener("click", () => {
+  mostrarToast("Actualizando...");
+  cargarPuntos();
+});
+
+// ── Helpers ───────────────────────────────────────────────
+function claseParam(p, v) {
+  const r = NCH[p];
+  if (v >= r.ok[0]   && v <= r.ok[1])   return "ok";
+  if (v >= r.warn[0] && v <= r.warn[1]) return "warn";
+  return "crit";
+}
+
+function barraParam(etiqueta, valor, param, cls) {
+  const r   = NCH[param];
+  const pct = Math.min(100, Math.max(0, ((valor - r.min) / (r.max - r.min)) * 100));
+  return `<div class="param-wrap">
+    <div class="param-cabecera">
+      <span class="param-nombre">${etiqueta}</span>
+      <span class="${cls}">${valor}${r.unidad}</span>
+    </div>
+    <div class="barra-bg"><div class="barra-fill barra-${cls}" style="width:${pct}%"></div></div>
+    <div class="param-rango">Normal: ${r.rango}</div>
+  </div>`;
+}
+
+function iconoTipo(tipo) {
+  return { pozo:"🕳", vertiente:"💧", río:"🏞", rio:"🏞" }[tipo?.toLowerCase()] || "📍";
+}
+
+function diasTexto(d) {
+  if (d === 0) return "hoy";
+  if (d === 1) return "ayer";
+  return `hace ${d} dias`;
+}
+
+function mostrarToast(msg, ms = 3200) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("visible");
+  setTimeout(() => t.classList.remove("visible"), ms);
+}
+
+// ── Eventos filtros ───────────────────────────────────────
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll(".chip").forEach(c => c.classList.remove("activo"));
+    chip.classList.add("activo");
+    filtros.color = chip.dataset.color;
+    renderizarMarcadores();
+  });
+});
+document.getElementById("sel-tipo").addEventListener("change", e => {
+  filtros.tipo = e.target.value;
+  renderizarMarcadores();
+});
+document.getElementById("sel-comunidad").addEventListener("change", e => {
+  filtros.comunidad = e.target.value;
+  renderizarMarcadores();
+});
+document.getElementById("btn-reset").addEventListener("click", () => {
+  filtros.color = ""; filtros.tipo = ""; filtros.comunidad = "";
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("activo"));
+  document.querySelector(".chip-todos").classList.add("activo");
+  document.getElementById("sel-tipo").value = "";
+  document.getElementById("sel-comunidad").value = "";
+  renderizarMarcadores();
+});
+document.getElementById("btn-exportar").addEventListener("click", exportarCSV);
+document.getElementById("btn-exportar-pdf").addEventListener("click", exportarPDFFiltrado);
+document.getElementById("btn-cerrar-detalle").addEventListener("click", () => {
+  document.getElementById("panel-detalle").classList.remove("abierto");
+});
+mapa.on("click", () => {
+  document.getElementById("panel-detalle").classList.remove("abierto");
+});
+
+// ── Arranque ──────────────────────────────────────────────
+cargarPuntos();
+</script>
+</body>
 </html>
 

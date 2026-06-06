@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Usuario(Base):
@@ -24,6 +24,7 @@ class PuntoMonitoreo(Base):
     comunidad = Column(String(100), nullable=False)  # Cambios 26/04
     latitud = Column(Float, nullable=False)
     longitud = Column(Float, nullable=False)
+    fecha_creacion = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # FIX Iter. 4: utcnow deprecado
 
     mediciones = relationship("Medicion", back_populates="punto")
 
@@ -36,7 +37,7 @@ class Medicion(Base):
     ph = Column(Float, nullable=False)
     cloro = Column(Float, nullable=False)
     turbidez = Column(Float, nullable=False)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # --- NUEVAS COLUMNAS (Iteración 2) ---
     apta = Column(Boolean, nullable=False, default=True)
@@ -58,6 +59,6 @@ class Alerta(Base):
     nivel = Column(String(20), nullable=False)  # "crítico" o "advertencia"
     mensaje = Column(String(255), nullable=False)
     leida = Column(Boolean, default=False)
-    fecha = Column(DateTime, default=datetime.utcnow)
+    fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     medicion = relationship("Medicion", back_populates="alertas")

@@ -72,6 +72,7 @@
 ### Iniciar Servidor
 ```bash
 uvicorn main:app --reload
+```
 
 ---
 
@@ -83,3 +84,27 @@ En la **Semana 8**, el proyecto implementó una suite de pruebas automatizadas p
 Para validar el sistema y generar el reporte de métricas, ejecute:
 ```bash
 pytest --cov=. --cov-report=term-missing
+```
+
+### Visualización Mapa Interactivo.
+En la **Semana 9**, se implementó en el proyecto un mapa interactivo con los siguientes colores:
+
+⚫ GRIS — El punto no tiene ninguna medición registrada.
+
+🟢 VERDE — Agua apta, todos los parámetros dentro de norma:
+
+pH: 6.5 – 8.5
+Cloro: 0.2 – 2.0 mg/L
+Turbidez: ≤ 5 NTU
+
+🟡 AMARILLO — Agua apta técnicamente, pero algún parámetro está en zona límite (genera alerta de advertencia). Basta que uno solo esté en este rango:
+
+pH: 6.0 – 6.5 o 8.5 – 9.0
+Cloro: 2.0 – 3.0 mg/L
+Turbidez: 5 – 10 NTU
+
+🔴 ROJO — Agua NO apta, algún parámetro superó el límite crítico:
+
+pH: < 6.0 o > 9.0
+Cloro: < 0.2 mg/L o > 3.0 mg/L
+Turbidez: > 10 NTU

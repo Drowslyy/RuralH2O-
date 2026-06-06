@@ -2,7 +2,7 @@
 #         Validación
 # =============================
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -20,14 +20,13 @@ class MedicionBase(BaseModel):
 class MedicionCreate(MedicionBase): #Que datos recibes por parte del usuario
     pass
 
-class MedicionOut(MedicionBase): #Muestra los datos al usuarios 
-    id        : int 
+class MedicionOut(MedicionBase): #Muestra los datos al usuarios
+    id        : int
     fecha     : datetime
-    apta      : bool  
+    apta      : bool
     observaciones: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Iter. 4: class Config deprecado
 
 
 # ── Puntos de monitoreo ───────────────────────────────────
@@ -44,8 +43,7 @@ class PuntoCreate(PuntoBase):
 
 class PuntoOut(PuntoBase):
     id : int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Iter. 4
 
 
 # ── Usuario ─────────────────────────────────────────
@@ -59,8 +57,7 @@ class UsuarioCreate(UsuarioBase):
 
 class UsuarioOut(UsuarioBase):
     id : int
-    class Config:
-        from_attributes = True 
+    model_config = ConfigDict(from_attributes=True)  # Iter. 4
 
 # ── Login ─────────────────────────────────────────
 
@@ -89,5 +86,5 @@ class AlertaOut(AlertaBase):
     leida : bool
     fecha : datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)  # Iter. 4
+

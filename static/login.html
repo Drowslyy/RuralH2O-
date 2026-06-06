@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RuralH₂O — Iniciar sesión</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1923; color: #e2e8f0;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+
+    .card {
+      background: #0d1b2a; border: 1px solid #1e3a5f;
+      border-radius: 14px; padding: 38px 36px 32px;
+      width: 100%; max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+
+    .logo {
+      text-align: center; margin-bottom: 28px;
+    }
+    .logo h1 {
+      font-size: 1.6rem; font-weight: 800; color: #38bdf8; letter-spacing: .5px;
+    }
+    .logo p {
+      font-size: .8rem; color: #64748b; margin-top: 5px;
+    }
+
+    .campo { margin-bottom: 16px; }
+    .campo label {
+      display: block; font-size: .73rem; font-weight: 700;
+      color: #64748b; text-transform: uppercase; letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+    .campo input {
+      width: 100%; background: #1a2e45; border: 1px solid #2d4f6e;
+      color: #e2e8f0; padding: 10px 13px; border-radius: 8px; font-size: .9rem;
+      transition: border-color .2s; outline: none;
+    }
+    .campo input:focus { border-color: #38bdf8; }
+    .campo input::placeholder { color: #475569; }
+
+    #btn-login {
+      width: 100%; padding: 11px; border-radius: 8px;
+      background: #0ea5e9; border: none; color: #fff;
+      font-size: .92rem; font-weight: 700; cursor: pointer;
+      transition: background .2s; margin-top: 6px;
+    }
+    #btn-login:hover:not(:disabled) { background: #38bdf8; }
+    #btn-login:disabled { background: #1e3a5f; color: #475569; cursor: not-allowed; }
+
+    #mensaje-error {
+      margin-top: 14px; padding: 10px 13px; border-radius: 8px;
+      background: rgba(239,68,68,.12); border: 1px solid #ef4444;
+      color: #fca5a5; font-size: .82rem; display: none;
+    }
+
+    .footer-card {
+      text-align: center; margin-top: 22px;
+      font-size: .72rem; color: #475569;
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin .6s linear infinite; vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">
+    <h1>RuralH₂O</h1>
+    <p>Sistema de monitoreo de calidad del agua · Aysén</p>
+  </div>
+
+  <form id="form-login" autocomplete="off">
+    <div class="campo">
+      <label for="email">Correo electrónico</label>
+      <input type="email" id="email" placeholder="usuario@ejemplo.cl" required autofocus />
+    </div>
+    <div class="campo">
+      <label for="password">Contraseña</label>
+      <input type="password" id="password" placeholder="••••••••" required />
+    </div>
+
+    <button type="submit" id="btn-login">Iniciar sesión</button>
+    <div id="mensaje-error"></div>
+  </form>
+
+  <div class="footer-card">NCh 409 · Región de Aysén</div>
+</div>
+
+<script>
+"use strict";
+const API_BASE = "http://localhost:8000";
+
+// Si ya hay sesión activa, ir directo al mapa
+if (sessionStorage.getItem("token")) {
+  window.location.replace("index.html");
+}
+
+document.getElementById("form-login").addEventListener("submit", async e => {
+  e.preventDefault();
+
+  const btn    = document.getElementById("btn-login");
+  const errDiv = document.getElementById("mensaje-error");
+  const email  = document.getElementById("email").value.trim();
+  const pass   = document.getElementById("password").value;
+
+  // UI de carga
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ingresando…';
+  errDiv.style.display = "none";
+
+  try {
+    // El endpoint /login usa form-data (OAuth2PasswordRequestForm)
+    const body = new URLSearchParams({ username: email, password: pass });
+    const res  = await fetch(`${API_BASE}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || "Credenciales incorrectas");
+    }
+
+    const data = await res.json();
+    sessionStorage.setItem("token", data.access_token);
+
+    // Decodificar payload para guardar rol y nombre de usuario
+    const payload = JSON.parse(atob(data.access_token.split(".")[1]));
+    sessionStorage.setItem("user_email", payload.sub || email);
+    sessionStorage.setItem("user_rol",   payload.rol  || "");
+
+    window.location.replace("index.html");
+
+  } catch (err) {
+    errDiv.textContent  = "⚠ " + err.message;
+    errDiv.style.display = "block";
+    btn.disabled = false;
+    btn.textContent = "Iniciar sesión";
+    document.getElementById("password").value = "";
+    document.getElementById("password").focus();
+  }
+});
+</script>
+</body>
+</html>
