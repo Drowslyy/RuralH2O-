@@ -102,11 +102,17 @@
 
 <script>
 "use strict";
-const API_BASE = "http://localhost:8000";
+const API_BASE = window.location.origin;
 
-// Si ya hay sesión activa, ir directo al mapa
+// Detectar si es móvil
+function esMobil() {
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+         window.innerWidth < 768;
+}
+
+// Si ya hay sesión activa, redirigir según dispositivo
 if (sessionStorage.getItem("token")) {
-  window.location.replace("index.html");
+  window.location.replace(esMobil() ? "campo.html" : "index.html");
 }
 
 document.getElementById("form-login").addEventListener("submit", async e => {
@@ -144,7 +150,8 @@ document.getElementById("form-login").addEventListener("submit", async e => {
     sessionStorage.setItem("user_email", payload.sub || email);
     sessionStorage.setItem("user_rol",   payload.rol  || "");
 
-    window.location.replace("index.html");
+    // Redirigir según dispositivo: móvil → campo.html, PC → index.html
+    window.location.replace(esMobil() ? "campo.html" : "index.html");
 
   } catch (err) {
     errDiv.textContent  = "⚠ " + err.message;

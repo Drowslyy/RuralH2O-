@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RuralH₂O — Registrar Medición</title>
 
+  <!-- PWA -->
+  <link rel="manifest" href="/view/manifest.json" />
+  <meta name="theme-color" content="#0056b3" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="RuralH2O" />
+  <link rel="apple-touch-icon" href="/view/icon-192.png" />
+
+  <!-- Leaflet (para selección de coordenadas en Nuevo punto) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -12,607 +21,754 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', system-ui, sans-serif;
-      background: #0f1923; color: #e2e8f0;
-      min-height: 100vh; display: flex; flex-direction: column;
+      background: #0f1923; color: #e2e8f0; min-height: 100vh;
     }
 
+    /* ── Topbar ─────────────────────────────── */
     #topbar {
-      display: flex; align-items: center; justify-content: space-between;
-      background: #0d1b2a; padding: 9px 18px;
+      background: #0d1b2a; padding: 10px 20px;
       border-bottom: 1px solid #1e3a5f;
-      box-shadow: 0 2px 8px rgba(0,0,0,.4); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
     }
+    #topbar-izq { display: flex; flex-direction: column; gap: 1px; }
     #topbar h1 { font-size: 1rem; font-weight: 700; color: #38bdf8; }
-    #topbar h1 span { color: #64748b; font-weight: 400; font-size: .8rem; margin-left: 6px; }
+    #topbar-sub { font-size: .7rem; color: #64748b; }
+    #topbar-der { display: flex; align-items: center; gap: 10px; }
+    #badge-pendientes {
+      display: none; background: #713f12; color: #facc15;
+      font-size: .7rem; font-weight: 700; padding: 2px 10px;
+      border-radius: 999px; border: 1px solid #ca8a04;
+    }
+    #badge-pendientes.visible { display: inline-block; }
     #btn-volver {
-      font-size: .78rem; color: #94a3b8; cursor: pointer;
+      font-size: .78rem; color: #38bdf8; text-decoration: none; cursor: pointer;
       padding: 5px 12px; border-radius: 6px; border: 1px solid #1e3a5f;
-      background: #0d1b2a; text-decoration: none; transition: all .2s;
+      background: #0d1b2a; transition: all .2s;
     }
-    #btn-volver:hover { border-color: #38bdf8; color: #38bdf8; }
+    #btn-volver:hover { background: #1e3a5f; }
+    #btn-logout {
+      font-size: .78rem; color: #f87171; cursor: pointer;
+      padding: 5px 12px; border-radius: 6px; border: 1px solid #7f1d1d;
+      background: #0d1b2a; transition: all .2s;
+    }
+    #btn-logout:hover { background: #7f1d1d; }
 
+    /* ── Offline banner ─────────────────────── */
+    #banner-offline {
+      display: none; background: #7f1d1d; color: #fca5a5;
+      font-size: .78rem; font-weight: 600; text-align: center; padding: 7px;
+    }
+    #banner-offline.visible { display: block; }
+
+    /* ── Tabs ───────────────────────────────── */
     #tabs {
-      display: flex; gap: 0; background: #0d1b2a;
-      border-bottom: 1px solid #1e3a5f; flex-shrink: 0; padding: 0 18px;
+      display: flex; border-bottom: 1px solid #1e3a5f;
+      background: #0d1b2a; padding: 0 20px;
     }
-    .tab {
-      padding: 10px 18px; font-size: .8rem; font-weight: 600;
-      color: #64748b; cursor: pointer; border-bottom: 2px solid transparent;
-      transition: all .2s; user-select: none; white-space: nowrap;
+    .tab-btn {
+      padding: 11px 18px; font-size: .82rem; font-weight: 600;
+      color: #64748b; cursor: pointer; border: none; background: none;
+      border-bottom: 2px solid transparent; transition: all .2s;
+      white-space: nowrap;
     }
-    .tab:hover { color: #94a3b8; }
-    .tab.activo { color: #38bdf8; border-bottom-color: #38bdf8; }
-    .tab.solo-admin { color: #34d399; }
-    .tab.solo-admin.activo { color: #4ade80; border-bottom-color: #4ade80; }
+    .tab-btn:hover { color: #94a3b8; }
+    .tab-btn.activo { color: #38bdf8; border-bottom-color: #38bdf8; }
+    .tab-panel { display: none; }
+    .tab-panel.activo { display: block; }
 
-    main {
-      flex: 1; display: flex; align-items: flex-start;
-      justify-content: center; padding: 28px 16px; gap: 22px;
-      flex-wrap: wrap; overflow-y: auto;
-    }
+    /* ── Layout centrado ────────────────────── */
+    #contenido { max-width: 760px; margin: 0 auto; padding: 24px 20px 60px; }
 
-    .panel-tab { display: none; width: 100%; }
-    .panel-tab.activo { display: contents; }
-
+    /* ── Cards ──────────────────────────────── */
     .card {
       background: #0d1b2a; border: 1px solid #1e3a5f;
-      border-radius: 12px; padding: 24px 24px 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      border-radius: 12px; padding: 22px; margin-bottom: 16px;
     }
     .card-titulo {
-      font-size: .78rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .8px; color: #64748b; margin-bottom: 18px;
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .7px; color: #64748b; margin-bottom: 18px;
     }
 
+    /* ── Formulario ─────────────────────────── */
     .campo { margin-bottom: 14px; }
     .campo label {
-      display: block; font-size: .7rem; font-weight: 700;
-      color: #64748b; text-transform: uppercase; letter-spacing: .5px;
-      margin-bottom: 5px;
+      display: block; font-size: .7rem; font-weight: 700; color: #64748b;
+      text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px;
     }
-    .campo input, .campo select {
+    .campo input, .campo select, .campo textarea {
       width: 100%; background: #1a2e45; border: 1px solid #2d4f6e;
-      color: #e2e8f0; padding: 8px 11px; border-radius: 7px; font-size: .86rem;
-      transition: border-color .2s; outline: none; appearance: none;
+      color: #e2e8f0; padding: 10px 13px; border-radius: 8px;
+      font-size: .92rem; outline: none; appearance: none;
+      transition: border-color .2s; font-family: inherit;
     }
-    .campo input:focus, .campo select:focus { border-color: #38bdf8; }
-    .campo .hint { font-size: .67rem; color: #475569; margin-top: 3px; }
-    .campo .hint.ok   { color: #4ade80; }
-    .campo .hint.warn { color: #facc15; }
-    .campo .hint.crit { color: #f87171; }
-
-    .params-grid {
-      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 11px;
-      margin-bottom: 14px;
+    .campo input:focus, .campo select:focus, .campo textarea:focus {
+      border-color: #38bdf8;
     }
+    .campo textarea { min-height: 68px; resize: vertical; }
+    .hint { font-size: .67rem; color: #64748b; margin-top: 4px; }
+    .hint.ok   { color: #4ade80; }
+    .hint.warn { color: #facc15; }
+    .hint.crit { color: #f87171; }
 
+    /* Grid 3 columnas para parámetros */
+    .params-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 500px) { .params-grid { grid-template-columns: 1fr 1fr; } }
+
+    /* ── Preview NCh 409 ────────────────────── */
     #preview-estado {
-      background: #1a2e45; border-radius: 8px; padding: 11px 13px;
+      background: #1a2e45; border-radius: 8px; padding: 13px;
       margin-bottom: 16px; display: none;
     }
-    #preview-estado .pre-titulo {
-      font-size: .66rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .6px; color: #64748b; margin-bottom: 7px;
+    .pre-titulo {
+      font-size: .65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: #64748b; margin-bottom: 10px;
     }
-    .pre-fila { display: flex; justify-content: space-between; font-size: .78rem; margin-bottom: 3px; }
-    .pre-fila:last-child { margin-bottom: 0; }
+    .pre-fila {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .8rem; margin-bottom: 5px;
+    }
     .pre-llave { color: #94a3b8; }
-    .pre-color { padding: 2px 10px; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+    .badge { padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
     .col-green  { background: #14532d; color: #4ade80; }
     .col-yellow { background: #713f12; color: #facc15; }
     .col-red    { background: #7f1d1d; color: #f87171; }
     .col-gray   { background: #374151; color: #9ca3af; }
 
-    .btn-primario {
-      width: 100%; padding: 10px; border-radius: 8px;
-      background: #0ea5e9; border: none; color: #fff;
-      font-size: .88rem; font-weight: 700; cursor: pointer;
-      transition: background .2s;
+    /* ── Sync panel ─────────────────────────── */
+    #sync-panel {
+      background: rgba(113,63,18,.15); border: 1px solid #ca8a04;
+      border-radius: 10px; padding: 14px; margin-bottom: 16px; display: none;
     }
-    .btn-primario:hover:not(:disabled) { background: #38bdf8; }
-    .btn-primario:disabled { background: #1e3a5f; color: #475569; cursor: not-allowed; }
-    .btn-verde { background: #15803d; }
-    .btn-verde:hover:not(:disabled) { background: #16a34a; }
+    #sync-panel.visible { display: block; }
+    #sync-titulo { font-size: .8rem; font-weight: 700; color: #facc15; margin-bottom: 8px; }
+    #btn-sync {
+      padding: 8px 16px; border-radius: 7px; border: 1px solid #ca8a04;
+      background: rgba(113,63,18,.3); color: #facc15; font-size: .8rem;
+      font-weight: 700; cursor: pointer;
+    }
 
+    /* ── Botones ────────────────────────────── */
+    .btn {
+      padding: 11px 22px; border-radius: 9px; border: none;
+      font-size: .9rem; font-weight: 700; cursor: pointer; transition: .2s;
+    }
+    .btn-blue  { background: #0ea5e9; color: #fff; }
+    .btn-blue:hover  { background: #38bdf8; }
+    .btn-blue:disabled { background: #1a2e45; color: #64748b; cursor: not-allowed; }
+    .btn-green { background: #15803d; color: #fff; }
+    .btn-green:hover { background: #16a34a; }
+
+    /* ── Mensajes ───────────────────────────── */
     .mensaje {
-      margin-top: 12px; padding: 9px 12px; border-radius: 8px;
-      font-size: .81rem; display: none;
+      margin-top: 14px; padding: 11px 14px; border-radius: 8px;
+      font-size: .84rem; display: none; line-height: 1.4;
     }
-    .mensaje.ok    { background: rgba(74,222,128,.1);  border: 1px solid #16a34a; color: #4ade80; }
-    .mensaje.error { background: rgba(239,68,68,.1);   border: 1px solid #ef4444; color: #fca5a5; }
+    .mensaje.ok    { background: rgba(74,222,128,.1); border: 1px solid #16a34a; color: #4ade80; }
+    .mensaje.error { background: rgba(239,68,68,.1);  border: 1px solid #ef4444; color: #fca5a5; }
 
-    #tabla-historial { width: 100%; border-collapse: collapse; font-size: .76rem; }
-    #tabla-historial th {
-      text-align: left; padding: 5px 7px;
-      font-size: .64rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .5px; color: #475569; border-bottom: 1px solid #1a2e45;
-    }
-    #tabla-historial td { padding: 7px 7px; border-bottom: 1px solid #1a2e45; color: #94a3b8; }
-    #tabla-historial tr:last-child td { border-bottom: none; }
-    .td-apta { font-weight: 700; }
-    .td-apta.ok   { color: #4ade80; }
-    .td-apta.crit { color: #f87171; }
-
-    #mini-mapa-wrap {
-      background: #1a2e45; border: 1px solid #2d4f6e;
-      border-radius: 8px; overflow: hidden; margin-bottom: 12px;
-    }
-    #mini-mapa-label {
-      font-size: .7rem; color: #64748b; padding: 7px 11px 6px;
-      border-bottom: 1px solid #2d4f6e;
-    }
-    #mini-mapa { height: 220px; width: 100%; }
-
-    #coords-display { display: flex; gap: 10px; margin-bottom: 12px; }
-    #coords-display .campo { flex: 1; margin-bottom: 0; }
-    #coords-display input { background: #111e2e; color: #64748b; }
-    #coords-display input.tiene-valor { color: #4ade80; border-color: #166534; }
-
-    .instruccion-mapa {
-      font-size: .73rem; color: #475569; text-align: center;
-      padding: 8px; background: #111e2e; border-radius: 6px;
-      margin-bottom: 12px;
-    }
-    .instruccion-mapa.ok { color: #4ade80; background: rgba(74,222,128,.07); }
-
+    /* ── Spinner ────────────────────────────── */
     .spinner {
       display: inline-block; width: 13px; height: 13px;
       border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
       border-radius: 50%; animation: spin .6s linear infinite;
-      vertical-align: middle; margin-right: 5px;
+      vertical-align: middle; margin-right: 6px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Boton PDF ── */
-    .btn-pdf {
-      display: inline-block; padding: 7px 18px;
-      background: #1e3a5f; color: #38bdf8;
-      border: 1px solid #38bdf8; border-radius: 6px;
-      font-size: .8rem; font-weight: 600; text-decoration: none;
-      transition: all .2s; cursor: pointer;
+    /* ── Mini-mapa ──────────────────────────── */
+    #mini-mapa {
+      height: 300px; border-radius: 8px; overflow: hidden;
+      border: 1px solid #2d4f6e; margin-bottom: 10px;
     }
-    .btn-pdf:hover { background: #38bdf8; color: #0d1b2a; }
+    #coords-display {
+      font-size: .75rem; color: #64748b; background: #1a2e45;
+      padding: 7px 12px; border-radius: 6px; margin-bottom: 14px;
+    }
+    #coords-display span { color: #38bdf8; font-weight: 700; }
+
+    /* ── Rol oculto ─────────────────────────── */
+    .solo-admin { display: none; }
+    .solo-admin.visible { display: block; }
   </style>
 </head>
 <body>
 
+<!-- TOPBAR -->
 <div id="topbar">
-  <h1>RuralH₂O <span>Registrar medición</span></h1>
-  <a id="btn-volver" href="index.html">← Volver al mapa</a>
+  <div id="topbar-izq">
+    <h1>💧 RuralH₂O — Registrar Medición
+      <span id="badge-pendientes">⏳ 0</span>
+    </h1>
+    <span id="topbar-sub">Sistema de monitoreo NCh 409 · Región de Aysén</span>
+  </div>
+  <div id="topbar-der">
+    <a id="btn-volver" href="index.html">← Mapa</a>
+    <button id="btn-logout" onclick="cerrarSesion()">⏻ Salir</button>
+  </div>
 </div>
 
+<!-- BANNER OFFLINE -->
+<div id="banner-offline">📵 Sin conexión — las mediciones se guardan localmente y se sincronizan al volver online</div>
+
+<!-- TABS -->
 <div id="tabs">
-  <div class="tab activo" data-tab="medicion">📋 Nueva medición</div>
-  <div class="tab solo-admin" data-tab="punto" id="tab-punto" style="display:none">
-    ＋ Nuevo punto de monitoreo
-  </div>
+  <button class="tab-btn activo" onclick="cambiarTab(0)">📋 Nueva medición</button>
+  <button class="tab-btn solo-admin" id="tab-btn-punto" onclick="cambiarTab(1)">＋ Nuevo punto</button>
 </div>
 
-<!-- TAB: MEDICION -->
-<div id="panel-medicion" class="panel-tab activo">
-<main>
+<!-- CONTENIDO -->
+<div id="contenido">
 
-  <div class="card" style="width:100%;max-width:440px">
-    <div class="card-titulo">📋 Nueva medición NCh 409</div>
+  <!-- ── TAB 0: Nueva Medición ─────────────────────── -->
+  <div class="tab-panel activo" id="tab-0">
 
-    <form id="form-medicion" autocomplete="off">
-      <div class="campo">
-        <label for="sel-punto">Punto de monitoreo</label>
-        <select id="sel-punto" required>
-          <option value="">Cargando puntos…</option>
-        </select>
-      </div>
+    <!-- Panel de sincronización -->
+    <div id="sync-panel">
+      <div id="sync-titulo">⏳ Mediciones pendientes de sincronizar</div>
+      <button id="btn-sync" onclick="sincronizarPendientes()">↑ Sincronizar ahora</button>
+    </div>
 
-      <div class="params-grid">
+    <div class="card">
+      <div class="card-titulo">📋 Datos de la medición</div>
+
+      <form id="form-medicion" autocomplete="off">
         <div class="campo">
-          <label for="inp-ph">pH</label>
-          <input type="number" id="inp-ph" step="0.1" min="0" max="14" placeholder="7.0" required />
-          <div class="hint" id="hint-ph">Normal: 6.5–8.5</div>
-        </div>
-        <div class="campo">
-          <label for="inp-cloro">Cloro (mg/L)</label>
-          <input type="number" id="inp-cloro" step="0.1" min="0" max="5" placeholder="1.0" required />
-          <div class="hint" id="hint-cloro">Normal: 0.2–2.0</div>
-        </div>
-        <div class="campo">
-          <label for="inp-turbidez">Turbidez (NTU)</label>
-          <input type="number" id="inp-turbidez" step="0.1" min="0" placeholder="2.0" required />
-          <div class="hint" id="hint-turbidez">Normal: ≤5</div>
-        </div>
-      </div>
-
-      <div id="preview-estado">
-        <div class="pre-titulo">Vista previa NCh 409</div>
-        <div class="pre-fila">
-          <span class="pre-llave">Estado proyectado</span>
-          <span id="pre-color" class="pre-color col-gray">—</span>
-        </div>
-        <div class="pre-fila">
-          <span class="pre-llave">Apta para consumo</span>
-          <span id="pre-apta" style="font-weight:700">—</span>
-        </div>
-        <div class="pre-fila" id="pre-obs-wrap" style="display:none">
-          <span class="pre-llave">Observaciones</span>
-          <span id="pre-obs" style="font-size:.73rem;max-width:200px;text-align:right"></span>
-        </div>
-      </div>
-
-      <button type="submit" id="btn-enviar" class="btn-primario">Registrar medición</button>
-      <div class="mensaje ok"    id="msg-ok"></div>
-      <div class="mensaje error" id="msg-error"></div>
-    </form>
-  </div>
-
-  <!-- Historial reciente -->
-  <div class="card" style="width:100%;max-width:370px">
-    <div class="card-titulo">🕐 Historial del punto</div>
-    <div id="historial-vacio" style="color:#475569;font-size:.82rem;text-align:center;padding:14px 0">
-      Selecciona un punto para ver su historial
-    </div>
-    <table id="tabla-historial" style="display:none">
-      <thead>
-        <tr><th>Fecha</th><th>pH</th><th>Cloro</th><th>Turb.</th><th>Estado</th></tr>
-      </thead>
-      <tbody id="tbody-historial"></tbody>
-    </table>
-    <!-- RF-04: Boton PDF por punto -->
-    <div id="btn-pdf-wrap" style="display:none; margin-top:12px; text-align:center">
-      <a id="btn-descargar-pdf" href="#" target="_blank" class="btn-pdf">
-        ⬇ Descargar reporte PDF
-      </a>
-    </div>
-  </div>
-
-</main>
-</div>
-
-<!-- TAB: NUEVO PUNTO -->
-<div id="panel-punto" class="panel-tab">
-<main>
-
-  <div class="card" style="width:100%;max-width:520px">
-    <div class="card-titulo">📍 Nuevo punto de monitoreo</div>
-
-    <div id="mini-mapa-wrap">
-      <div id="mini-mapa-label">Haz clic en el mapa para marcar la ubicación del punto</div>
-      <div id="mini-mapa"></div>
-    </div>
-
-    <div id="instruccion-coords" class="instruccion-mapa">
-      👆 Haz clic en el mapa para seleccionar las coordenadas
-    </div>
-
-    <div id="coords-display">
-      <div class="campo">
-        <label>Latitud</label>
-        <input type="text" id="inp-lat" readonly placeholder="— clic en el mapa —" />
-      </div>
-      <div class="campo">
-        <label>Longitud</label>
-        <input type="text" id="inp-lng" readonly placeholder="— clic en el mapa —" />
-      </div>
-    </div>
-
-    <form id="form-punto" autocomplete="off">
-      <div class="campo">
-        <label for="inp-nombre-punto">Nombre del punto</label>
-        <input type="text" id="inp-nombre-punto" placeholder="Ej: Pozo sector norte" required />
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
-        <div class="campo">
-          <label for="inp-tipo-fuente">Tipo de fuente</label>
-          <select id="inp-tipo-fuente" required>
-            <option value="">— Selecciona —</option>
-            <option value="pozo">🗻 Pozo</option>
-            <option value="vertiente">💧 Vertiente</option>
-            <option value="río">🏖 Río</option>
+          <label for="sel-punto">Punto de monitoreo *</label>
+          <select id="sel-punto" required>
+            <option value="">Cargando puntos…</option>
           </select>
         </div>
-        <div class="campo">
-          <label for="inp-comunidad-punto">Comunidad</label>
-          <input type="text" id="inp-comunidad-punto" placeholder="Ej: Villa Aysén" required />
+
+        <!-- Info del punto seleccionado: historial + descarga PDF -->
+        <div id="info-punto" style="display:none;background:#1a2e45;border-radius:8px;padding:10px 12px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#64748b">
+              📈 Últimas mediciones
+            </span>
+            <button type="button" id="btn-pdf-punto" class="btn btn-blue"
+                    style="width:auto;padding:5px 12px;font-size:.75rem;margin:0">
+              📄 Descargar PDF
+            </button>
+          </div>
+          <div id="hist-punto" style="font-size:.78rem;color:#94a3b8">Cargando…</div>
         </div>
-      </div>
 
-      <button type="submit" id="btn-crear-punto" class="btn-primario btn-verde" disabled>
-        Crear punto de monitoreo
-      </button>
-      <div class="mensaje ok"    id="msg-punto-ok"></div>
-      <div class="mensaje error" id="msg-punto-error"></div>
-    </form>
-  </div>
+        <div class="params-grid">
+          <div class="campo">
+            <label for="inp-ph">pH *</label>
+            <input type="number" id="inp-ph" step="0.1" min="0" max="14"
+                   placeholder="7.0" required />
+            <div class="hint" id="hint-ph">Rango normal: 6.5 – 8.5</div>
+          </div>
+          <div class="campo">
+            <label for="inp-cloro">Cloro libre (mg/L) *</label>
+            <input type="number" id="inp-cloro" step="0.1" min="0" max="5"
+                   placeholder="1.0" required />
+            <div class="hint" id="hint-cloro">Rango normal: 0.2 – 2.0</div>
+          </div>
+          <div class="campo">
+            <label for="inp-turbidez">Turbidez (NTU) *</label>
+            <input type="number" id="inp-turbidez" step="0.1" min="0"
+                   placeholder="2.0" required />
+            <div class="hint" id="hint-turbidez">Máximo: 5 NTU</div>
+          </div>
+        </div>
 
-  <div class="card" style="width:100%;max-width:300px;align-self:flex-start">
-    <div class="card-titulo">ℹ Instrucciones</div>
-    <div style="font-size:.8rem;color:#64748b;line-height:1.8">
-      <p style="margin-bottom:10px"><strong style="color:#94a3b8">1.</strong> Haz clic en el mapa para fijar la ubicación exacta del punto de monitoreo.</p>
-      <p style="margin-bottom:10px"><strong style="color:#94a3b8">2.</strong> Completa el nombre, tipo de fuente y comunidad.</p>
-      <p style="margin-bottom:10px"><strong style="color:#94a3b8">3.</strong> Al crear el punto, se abrirá automáticamente el formulario de medición.</p>
-      <p style="color:#475569;font-size:.72rem;margin-top:14px;border-top:1px solid #1a2e45;padding-top:10px">Solo los administradores pueden crear nuevos puntos.</p>
+        <!-- Preview NCh 409 -->
+        <div id="preview-estado">
+          <div class="pre-titulo">Vista previa — Clasificación NCh 409</div>
+          <div class="pre-fila">
+            <span class="pre-llave">Estado general</span>
+            <span id="pre-color" class="badge col-gray">—</span>
+          </div>
+          <div class="pre-fila">
+            <span class="pre-llave">Apta para consumo humano</span>
+            <span id="pre-apta" style="font-weight:700;color:#9ca3af">—</span>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-enviar" class="btn btn-blue">
+          ✔ Registrar medición
+        </button>
+
+        <div class="mensaje ok"    id="msg-ok"></div>
+        <div class="mensaje error" id="msg-error"></div>
+      </form>
     </div>
   </div>
 
-</main>
-</div>
+  <!-- ── TAB 1: Nuevo Punto (solo admin) ───────────── -->
+  <div class="tab-panel" id="tab-1">
+    <div class="card">
+      <div class="card-titulo">＋ Crear punto de monitoreo</div>
+
+      <form id="form-punto" autocomplete="off">
+        <div class="campo">
+          <label for="inp-nombre">Nombre del punto *</label>
+          <input type="text" id="inp-nombre" placeholder="Ej: Pozo Sector Norte" required />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="campo">
+            <label for="inp-tipo">Tipo de fuente *</label>
+            <select id="inp-tipo" required>
+              <option value="">— Seleccionar —</option>
+              <option value="pozo">🕳 Pozo</option>
+              <option value="vertiente">💧 Vertiente</option>
+              <option value="río">🏞 Río</option>
+            </select>
+          </div>
+          <div class="campo">
+            <label for="inp-comunidad">Comunidad *</label>
+            <input type="text" id="inp-comunidad" placeholder="Ej: Villa Aysén" required />
+          </div>
+        </div>
+
+        <div class="campo">
+          <label>Coordenadas — haz clic en el mapa para seleccionar *</label>
+          <div id="mini-mapa"></div>
+          <div id="coords-display">Haz clic en el mapa para establecer el punto →
+            <span id="lbl-coords">sin seleccionar</span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="campo">
+            <label for="inp-lat">Latitud</label>
+            <input type="text" id="inp-lat" inputmode="decimal" placeholder="-45.57000" />
+          </div>
+          <div class="campo">
+            <label for="inp-lng">Longitud</label>
+            <input type="text" id="inp-lng" inputmode="decimal" placeholder="-72.07000" />
+          </div>
+        </div>
+
+        <button type="submit" id="btn-crear-punto" class="btn btn-green">
+          ＋ Crear punto
+        </button>
+        <div class="mensaje ok"    id="msg-ok-punto"></div>
+        <div class="mensaje error" id="msg-error-punto"></div>
+      </form>
+    </div>
+  </div>
+
+</div><!-- /contenido -->
 
 <script>
 "use strict";
-const API_BASE = "http://localhost:8000";
 
-const TOKEN = sessionStorage.getItem("token");
+// ── Autenticación ────────────────────────────────────────────
+const API_BASE = window.location.origin;
+const TOKEN    = sessionStorage.getItem("token");
 if (!TOKEN) { window.location.replace("login.html"); }
+if (TOKEN) localStorage.setItem("ruralh2o_token", TOKEN);
+const TOKEN_USE = TOKEN || localStorage.getItem("ruralh2o_token") || "";
 const ROL = sessionStorage.getItem("user_rol") || "";
 
-if (ROL === "admin") {
-  document.getElementById("tab-punto").style.display = "block";
-}
+// El visualizador NO puede registrar mediciones ni crear puntos:
+// se le redirige al mapa (solo lectura).
 if (ROL === "visualizador") {
-  document.getElementById("btn-enviar").disabled = true;
-  document.getElementById("btn-enviar").textContent = "Solo lectura — sin permisos para registrar";
+  alert("Tu rol solo permite visualizar datos. Serás redirigido al mapa.");
+  window.location.replace("index.html");
 }
 
-let miniMapa = null;
-document.querySelectorAll(".tab").forEach(tab => {
-  tab.addEventListener("click", () => {
-    const nombre = tab.dataset.tab;
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("activo"));
-    document.querySelectorAll(".panel-tab").forEach(p => p.classList.remove("activo"));
-    tab.classList.add("activo");
-    document.getElementById("panel-" + nombre).classList.add("activo");
-    if (nombre === "punto" && !miniMapa) iniciarMiniMapa();
+// Mostrar pestaña "Nuevo punto" solo a administradores
+if (ROL === "admin") {
+  document.querySelectorAll(".solo-admin").forEach(el => el.classList.add("visible"));
+}
+
+function cerrarSesion() {
+  sessionStorage.clear(); localStorage.removeItem("ruralh2o_token");
+  window.location.replace("login.html");
+}
+
+// ── Tabs ─────────────────────────────────────────────────────
+function cambiarTab(idx) {
+  document.querySelectorAll(".tab-panel").forEach((p, i) => {
+    p.classList.toggle("activo", i === idx);
   });
-});
-
-let coordsSeleccionadas = null;
-let marcadorPunto       = null;
-
-function iniciarMiniMapa() {
-  miniMapa = L.map("mini-mapa", { center: [-45.57, -72.07], zoom: 9, minZoom: 7, maxZoom: 17 });
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(miniMapa);
-  miniMapa.on("click", e => {
-    const { lat, lng } = e.latlng;
-    coordsSeleccionadas = { lat, lng };
-    const latInput = document.getElementById("inp-lat");
-    const lngInput = document.getElementById("inp-lng");
-    latInput.value = lat.toFixed(6); lngInput.value = lng.toFixed(6);
-    latInput.classList.add("tiene-valor"); lngInput.classList.add("tiene-valor");
-    if (marcadorPunto) miniMapa.removeLayer(marcadorPunto);
-    marcadorPunto = L.marker([lat, lng], {
-      icon: L.divIcon({
-        className: "", iconSize: [22,22], iconAnchor: [11,11],
-        html: '<div style="width:22px;height:22px;border-radius:50%;background:#4ade80;border:3px solid rgba(255,255,255,.7);box-shadow:0 0 0 3px #4ade8055,0 2px 6px rgba(0,0,0,.5)"></div>',
-      })
-    }).addTo(miniMapa);
-    const instr = document.getElementById("instruccion-coords");
-    instr.textContent = "✔ Coordenadas seleccionadas: " + lat.toFixed(5) + ", " + lng.toFixed(5);
-    instr.classList.add("ok");
-    validarFormPunto();
+  document.querySelectorAll(".tab-btn").forEach((b, i) => {
+    b.classList.toggle("activo", i === idx);
   });
+  if (idx === 1 && !miniMapaInit) iniciarMiniMapa();
 }
 
-function validarFormPunto() {
-  const listo = coordsSeleccionadas
-    && document.getElementById("inp-nombre-punto").value.trim()
-    && document.getElementById("inp-tipo-fuente").value
-    && document.getElementById("inp-comunidad-punto").value.trim();
-  document.getElementById("btn-crear-punto").disabled = !listo;
-}
-["inp-nombre-punto","inp-tipo-fuente","inp-comunidad-punto"].forEach(id =>
-  document.getElementById(id).addEventListener("input", validarFormPunto)
-);
-
-document.getElementById("form-punto").addEventListener("submit", async e => {
-  e.preventDefault();
-  const btn = document.getElementById("btn-crear-punto");
-  const msgOk = document.getElementById("msg-punto-ok");
-  const msgError = document.getElementById("msg-punto-error");
-  msgOk.style.display = "none"; msgError.style.display = "none";
-  if (!coordsSeleccionadas) {
-    msgError.textContent = "Primero selecciona una ubicacion en el mapa.";
-    msgError.style.display = "block"; return;
-  }
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Creando...';
-  try {
-    const res = await fetch(API_BASE + "/puntos/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN },
-      body: JSON.stringify({
-        nombre: document.getElementById("inp-nombre-punto").value.trim(),
-        tipo_fuente: document.getElementById("inp-tipo-fuente").value,
-        comunidad: document.getElementById("inp-comunidad-punto").value.trim(),
-        latitud: coordsSeleccionadas.lat,
-        longitud: coordsSeleccionadas.lng,
-      }),
-    });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail || "Error HTTP " + res.status); }
-    const nuevoPunto = await res.json();
-    msgOk.textContent = "Punto \"" + nuevoPunto.nombre + "\" creado (ID " + nuevoPunto.id + "). Redirigiendo...";
-    msgOk.style.display = "block";
-    await cargarPuntos();
-    setTimeout(() => {
-      document.querySelector('[data-tab="medicion"]').click();
-      const sel = document.getElementById("sel-punto");
-      sel.value = nuevoPunto.id;
-      sel.dispatchEvent(new Event("change"));
-      window.scrollTo(0, 0);
-    }, 1200);
-  } catch (err) {
-    msgError.textContent = err.message; msgError.style.display = "block";
-    btn.disabled = false; btn.textContent = "Crear punto de monitoreo";
-  }
-});
-
+// ── NCh 409 hints y preview ──────────────────────────────────
 const NCH = {
   ph:       { ok: [6.5, 8.5], warn: [6.0, 9.0] },
   cloro:    { ok: [0.2, 2.0], warn: [0.0, 3.0] },
   turbidez: { ok: [0,   5.0], warn: [0,  10.0] },
 };
-function clasificar(param, v) {
-  const r = NCH[param];
-  if (v >= r.ok[0] && v <= r.ok[1]) return "ok";
+function clasificar(p, v) {
+  const r = NCH[p];
+  if (v >= r.ok[0] && v <= r.ok[1])   return "ok";
   if (v >= r.warn[0] && v <= r.warn[1]) return "warn";
   return "crit";
 }
+const MSGS = {
+  ok:   { ph:"Normal", cloro:"Normal", turbidez:"Normal" },
+  warn: { ph:"Zona límite", cloro:"Zona límite", turbidez:"Zona límite" },
+  crit: { ph:"Fuera de norma", cloro:"Fuera de norma", turbidez:"Fuera de norma" },
+};
 function actualizarHint(id, param, v) {
   const el = document.getElementById(id);
-  if (isNaN(v)) { el.className = "hint"; return; }
+  const deflt = { ph:"Rango normal: 6.5 – 8.5", cloro:"Rango normal: 0.2 – 2.0", turbidez:"Máximo: 5 NTU" };
+  if (isNaN(v)) { el.className = "hint"; el.textContent = deflt[param]; return; }
   const cls = clasificar(param, v);
-  const msgs = {
-    ok:   { ph:"Normal 6.5-8.5", cloro:"Normal 0.2-2.0", turbidez:"Normal <= 5 NTU" },
-    warn: { ph:"Zona limite",    cloro:"Zona limite",    turbidez:"Zona limite 5-10" },
-    crit: { ph:"Fuera de norma", cloro:"Fuera de norma", turbidez:"Fuera de norma"  },
-  };
-  el.textContent = msgs[cls][param];
-  el.className = "hint " + cls;
+  el.textContent = MSGS[cls][param]; el.className = "hint " + cls;
 }
 function actualizarPreview() {
   const ph  = parseFloat(document.getElementById("inp-ph").value);
   const clo = parseFloat(document.getElementById("inp-cloro").value);
   const tur = parseFloat(document.getElementById("inp-turbidez").value);
-  actualizarHint("hint-ph", "ph", ph);
-  actualizarHint("hint-cloro", "cloro", clo);
-  actualizarHint("hint-turbidez", "turbidez", tur);
+  actualizarHint("hint-ph",      "ph",       ph);
+  actualizarHint("hint-cloro",   "cloro",    clo);
+  actualizarHint("hint-turbidez","turbidez", tur);
   if (isNaN(ph) || isNaN(clo) || isNaN(tur)) {
     document.getElementById("preview-estado").style.display = "none"; return;
   }
   document.getElementById("preview-estado").style.display = "block";
-  const clPh = clasificar("ph", ph);
-  const clClo = clasificar("cloro", clo);
-  const clTur = clasificar("turbidez", tur);
-  const hayCrit = [clPh, clClo, clTur].includes("crit");
-  const hayWarn = [clPh, clClo, clTur].includes("warn");
-  let color, colorCls, aptaTexto, obs = [];
-  if (hayCrit) {
-    color = "No apta"; colorCls = "col-red"; aptaTexto = "No";
-    if (clPh  === "crit") obs.push("pH fuera de norma");
-    if (clClo === "crit") obs.push("Cloro fuera de norma");
-    if (clTur === "crit") obs.push("Turbidez fuera de norma");
-  } else if (hayWarn) {
-    color = "En limite"; colorCls = "col-yellow"; aptaTexto = "Si (advertencia)";
-    if (clPh  === "warn") obs.push("pH en zona limite");
-    if (clClo === "warn") obs.push("Cloro en zona limite");
-    if (clTur === "warn") obs.push("Turbidez en zona limite");
-  } else {
-    color = "Apta"; colorCls = "col-green"; aptaTexto = "Si";
-  }
+  const clsPh  = clasificar("ph",       ph);
+  const clsClo = clasificar("cloro",    clo);
+  const clsTur = clasificar("turbidez", tur);
+  const hayCrit = [clsPh, clsClo, clsTur].includes("crit");
+  const hayWarn = [clsPh, clsClo, clsTur].includes("warn");
   const preColor = document.getElementById("pre-color");
-  preColor.textContent = color; preColor.className = "pre-color " + colorCls;
-  document.getElementById("pre-apta").textContent = aptaTexto;
-  document.getElementById("pre-apta").style.color = hayCrit ? "#f87171" : hayWarn ? "#facc15" : "#4ade80";
-  const obsWrap = document.getElementById("pre-obs-wrap");
-  if (obs.length) { obsWrap.style.display = "flex"; document.getElementById("pre-obs").textContent = obs.join(", "); }
-  else { obsWrap.style.display = "none"; }
+  const preApta  = document.getElementById("pre-apta");
+  if (hayCrit) {
+    preColor.textContent = "No apta";      preColor.className = "badge col-red";
+    preApta.textContent  = "No";           preApta.style.color = "#f87171";
+  } else if (hayWarn) {
+    preColor.textContent = "Advertencia";  preColor.className = "badge col-yellow";
+    preApta.textContent  = "Sí (límite)";  preApta.style.color = "#facc15";
+  } else {
+    preColor.textContent = "Apta";         preColor.className = "badge col-green";
+    preApta.textContent  = "Sí";           preApta.style.color = "#4ade80";
+  }
 }
 ["inp-ph","inp-cloro","inp-turbidez"].forEach(id =>
   document.getElementById(id).addEventListener("input", actualizarPreview)
 );
 
+// ── Cargar puntos en selector ────────────────────────────────
 async function cargarPuntos() {
   try {
     const res = await fetch(API_BASE + "/puntos/");
     const puntos = await res.json();
     const sel = document.getElementById("sel-punto");
-    const valActual = sel.value;
-    sel.innerHTML = '<option value="">-- Selecciona un punto --</option>';
+    sel.innerHTML = '<option value="">— Selecciona un punto —</option>';
     puntos.forEach(p => {
       const opt = document.createElement("option");
       opt.value = p.id;
-      opt.textContent = p.nombre + " - " + p.comunidad + " (" + p.tipo_fuente + ")";
+      opt.textContent = p.nombre + " · " + p.comunidad;
       sel.appendChild(opt);
     });
-    if (valActual) sel.value = valActual;
   } catch (_) {
-    document.getElementById("sel-punto").innerHTML = '<option value="">Error al cargar puntos</option>';
+    document.getElementById("sel-punto").innerHTML =
+      '<option value="">⚠ Sin conexión</option>';
   }
 }
 
-// ── Historial y boton PDF por punto ──────────────────────
-document.getElementById("sel-punto").addEventListener("change", async e => {
-  const id = e.target.value;
-  const vacio = document.getElementById("historial-vacio");
-  const tabla = document.getElementById("tabla-historial");
-  const btnWrap = document.getElementById("btn-pdf-wrap");
-  const btnPdf  = document.getElementById("btn-descargar-pdf");
+// ── Punto seleccionado: historial + descarga PDF ─────────────
+async function mostrarInfoPunto(puntoId) {
+  const box = document.getElementById("info-punto");
+  if (!puntoId) { box.style.display = "none"; return; }
+  box.style.display = "block";
 
-  if (!id) {
-    vacio.textContent = "Selecciona un punto para ver su historial";
-    vacio.style.display = "block";
-    tabla.style.display = "none";
-    btnWrap.style.display = "none";
-    return;
-  }
+  const cont = document.getElementById("hist-punto");
+  cont.textContent = "Cargando…";
   try {
-    const res  = await fetch(API_BASE + "/mapa/historial/" + id + "?n=8");
+    const res  = await fetch(API_BASE + "/mapa/historial/" + puntoId + "?n=5");
+    if (!res.ok) throw new Error("HTTP " + res.status);
     const hist = await res.json();
-    const tbody = document.getElementById("tbody-historial");
-    tbody.innerHTML = "";
     if (!hist.length) {
-      vacio.textContent = "Sin mediciones anteriores";
-      vacio.style.display = "block";
-      tabla.style.display = "none";
-      btnWrap.style.display = "none";
+      cont.innerHTML = '<span style="color:#475569">Este punto aún no tiene mediciones registradas.</span>';
       return;
     }
-    [...hist].reverse().forEach(m => {
-      const tr = document.createElement("tr");
-      tr.innerHTML =
-        "<td>" + m.fecha + "</td><td>" + m.ph + "</td><td>" + m.cloro + "</td>" +
-        "<td>" + m.turbidez + "</td>" +
-        '<td class="td-apta ' + (m.apta ? "ok" : "crit") + '">' + (m.apta ? "Apta" : "No apta") + "</td>";
-      tbody.appendChild(tr);
-    });
-    vacio.style.display = "none";
-    tabla.style.display = "table";
-    // Mostrar boton PDF
-    btnPdf.href = API_BASE + "/puntos/" + id + "/reporte.pdf?n=50";
-    btnWrap.style.display = "block";
-  } catch (_) {}
+    // Mostrar las más recientes primero
+    const filas = hist.slice().reverse().map(m => {
+      const estado = m.apta
+        ? '<span style="color:#4ade80">Apta</span>'
+        : '<span style="color:#f87171">No apta</span>';
+      return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #0d1b2a">' +
+             '<span>' + m.fecha + '</span>' +
+             '<span>pH ' + m.ph + ' · Cl ' + m.cloro + ' · ' + m.turbidez + ' NTU</span>' +
+             estado + '</div>';
+    }).join("");
+    cont.innerHTML = filas;
+  } catch (_) {
+    cont.innerHTML = '<span style="color:#f87171">No se pudo cargar el historial.</span>';
+  }
+}
+
+document.getElementById("sel-punto").addEventListener("change", e => {
+  mostrarInfoPunto(e.target.value);
 });
 
-// ── Enviar medicion ───────────────────────────────────────
+document.getElementById("btn-pdf-punto").addEventListener("click", () => {
+  const id = document.getElementById("sel-punto").value;
+  if (!id) return;
+  window.open(API_BASE + "/puntos/" + id + "/reporte.pdf", "_blank");
+});
+
+// ── IndexedDB ────────────────────────────────────────────────
+const IDB_NAME  = "ruralh2o_offline";
+const IDB_STORE = "mediciones_pendientes";
+function abrirIDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => {
+      if (!e.target.result.objectStoreNames.contains(IDB_STORE))
+        e.target.result.createObjectStore(IDB_STORE, { keyPath:"id", autoIncrement:true });
+    };
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+async function guardarPendiente(d) {
+  const db = await abrirIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).add({ ...d, timestamp: Date.now() });
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+async function obtenerPendientes() {
+  const db = await abrirIDB();
+  return new Promise((res, rej) => {
+    const req = db.transaction(IDB_STORE,"readonly").objectStore(IDB_STORE).getAll();
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+async function eliminarPendiente(id) {
+  const db = await abrirIDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+  });
+}
+
+// ── UI pendientes ────────────────────────────────────────────
+async function actualizarUI() {
+  const pendientes = await obtenerPendientes();
+  const n = pendientes.length;
+  const badge  = document.getElementById("badge-pendientes");
+  const panel  = document.getElementById("sync-panel");
+  badge.textContent = "⏳ " + n;
+  badge.classList.toggle("visible", n > 0);
+  panel.classList.toggle("visible", n > 0);
+  document.getElementById("banner-offline").classList.toggle("visible", !navigator.onLine);
+}
+
+// ── Sincronizar ──────────────────────────────────────────────
+async function sincronizarPendientes() {
+  const pendientes = await obtenerPendientes();
+  if (!pendientes.length) return;
+  const btn = document.getElementById("btn-sync");
+  btn.textContent = "Sincronizando…"; btn.disabled = true;
+  let ok = 0;
+  for (const p of pendientes) {
+    try {
+      const res = await fetch(API_BASE + "/mediciones/", {
+        method: "POST",
+        headers: { "Content-Type":"application/json", "Authorization":"Bearer " + TOKEN_USE },
+        body: JSON.stringify({ ph:p.ph, cloro:p.cloro, turbidez:p.turbidez, punto_id:p.punto_id }),
+      });
+      if (res.ok) { await eliminarPendiente(p.id); ok++; }
+    } catch(_) { break; }
+  }
+  await actualizarUI();
+  btn.textContent = "↑ Sincronizar ahora"; btn.disabled = false;
+  if (ok > 0) {
+    const msgOk = document.getElementById("msg-ok");
+    msgOk.textContent = "✔ " + ok + " medición(es) sincronizada(s).";
+    msgOk.style.display = "block";
+    setTimeout(() => { msgOk.style.display = "none"; }, 4000);
+  }
+}
+
+window.addEventListener("online",  async () => { await actualizarUI(); await sincronizarPendientes(); });
+window.addEventListener("offline", actualizarUI);
+
+// ── Enviar medición ──────────────────────────────────────────
 document.getElementById("form-medicion").addEventListener("submit", async e => {
   e.preventDefault();
-  const btn = document.getElementById("btn-enviar");
-  const msgOk = document.getElementById("msg-ok");
+  const btn      = document.getElementById("btn-enviar");
+  const msgOk    = document.getElementById("msg-ok");
   const msgError = document.getElementById("msg-error");
   msgOk.style.display = "none"; msgError.style.display = "none";
+
   const puntoId = parseInt(document.getElementById("sel-punto").value);
   if (!puntoId) {
     msgError.textContent = "Selecciona un punto de monitoreo.";
     msgError.style.display = "block"; return;
   }
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Registrando...';
+  btn.innerHTML = '<span class="spinner"></span>Registrando…';
+
+  const datos = {
+    ph:       parseFloat(document.getElementById("inp-ph").value),
+    cloro:    parseFloat(document.getElementById("inp-cloro").value),
+    turbidez: parseFloat(document.getElementById("inp-turbidez").value),
+    punto_id: puntoId,
+  };
+
   try {
+    if (!navigator.onLine) throw new Error("__OFFLINE__");
     const res = await fetch(API_BASE + "/mediciones/", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + TOKEN },
-      body: JSON.stringify({
-        ph:       parseFloat(document.getElementById("inp-ph").value),
-        cloro:    parseFloat(document.getElementById("inp-cloro").value),
-        turbidez: parseFloat(document.getElementById("inp-turbidez").value),
-        punto_id: puntoId,
-      }),
+      headers: { "Content-Type":"application/json", "Authorization":"Bearer " + TOKEN_USE },
+      body: JSON.stringify(datos),
     });
-    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail || "Error HTTP " + res.status); }
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.detail || "Error " + res.status);
+    }
     const nueva = await res.json();
-    msgOk.textContent = "Medicion registrada (ID " + nueva.id + ") - " + (nueva.apta ? "Agua apta" : "Agua NO apta");
+    msgOk.textContent = "✔ Medición registrada — " + (nueva.apta ? "Agua APTA ✔" : "Agua NO APTA ✘");
     msgOk.style.display = "block";
-    document.getElementById("inp-ph").value = "";
-    document.getElementById("inp-cloro").value = "";
-    document.getElementById("inp-turbidez").value = "";
-    document.getElementById("preview-estado").style.display = "none";
-    document.getElementById("sel-punto").dispatchEvent(new Event("change"));
-  } catch (err) {
-    msgError.textContent = err.message; msgError.style.display = "block";
+    limpiarFormulario();
+  } catch(err) {
+    if (err.message === "__OFFLINE__" || err.name === "TypeError") {
+      await guardarPendiente(datos);
+      await actualizarUI();
+      msgOk.textContent = "📵 Sin conexión — guardado localmente. Se enviará al volver online.";
+      msgOk.style.display = "block";
+      limpiarFormulario();
+    } else {
+      msgError.textContent = err.message; msgError.style.display = "block";
+    }
   } finally {
-    btn.disabled = false; btn.textContent = "Registrar medicion";
+    btn.disabled = false; btn.textContent = "✔ Registrar medición";
   }
 });
 
+function limpiarFormulario() {
+  ["inp-ph","inp-cloro","inp-turbidez"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  document.getElementById("preview-estado").style.display = "none";
+}
+
+// ── Mini-mapa (Tab "Nuevo punto") ────────────────────────────
+let miniMapaInit = false;
+let miniMapa, marcadorSel;
+const INP_LAT = () => document.getElementById("inp-lat");
+const INP_LNG = () => document.getElementById("inp-lng");
+
+// Icono CSS (evita el icono PNG por defecto de Leaflet que aparece roto)
+function iconoSel() {
+  return L.divIcon({
+    className: "",
+    iconSize: [26, 26], iconAnchor: [13, 13],
+    html: '<div style="width:26px;height:26px;border-radius:50%;background:#38bdf8;' +
+          'border:3px solid white;box-shadow:0 0 0 4px rgba(56,189,248,.4)"></div>',
+  });
+}
+
+// Coloca/actualiza el marcador y sincroniza inputs + etiqueta con el
+// MISMO valor (5 decimales y SIEMPRE con punto decimal, no coma)
+function fijarCoords(lat, lng, moverVista) {
+  const latTxt = lat.toFixed(5);
+  const lngTxt = lng.toFixed(5);
+  if (marcadorSel) mapa_rm(marcadorSel);
+  marcadorSel = L.marker([lat, lng], { icon: iconoSel() }).addTo(miniMapa);
+  // Inputs de texto: garantizan punto decimal independiente del locale
+  INP_LAT().value = latTxt;
+  INP_LNG().value = lngTxt;
+  document.getElementById("lbl-coords").textContent = latTxt + ", " + lngTxt;
+  if (moverVista) miniMapa.setView([lat, lng], Math.max(miniMapa.getZoom(), 13));
+}
+
+function mapa_rm(m) { try { miniMapa.removeLayer(m); } catch(_){} }
+
+function iniciarMiniMapa() {
+  if (miniMapaInit) return;
+  miniMapa = L.map("mini-mapa", {
+    center: [-45.57, -72.07], zoom: 9,
+    maxBounds: L.latLngBounds(L.latLng(-49.8, -76.5), L.latLng(-43.3, -70.5)),
+  });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '© OpenStreetMap', maxZoom: 18,
+  }).addTo(miniMapa);
+
+  miniMapa.on("click", e => {
+    fijarCoords(e.latlng.lat, e.latlng.lng, false);
+  });
+
+  // Sincronizar inputs manuales → mapa
+  [INP_LAT, INP_LNG].forEach(fn => {
+    fn().addEventListener("change", () => {
+      const lat = parseFloat(INP_LAT().value.replace(",", "."));
+      const lng = parseFloat(INP_LNG().value.replace(",", "."));
+      if (isNaN(lat) || isNaN(lng)) return;
+      fijarCoords(lat, lng, true);
+    });
+  });
+
+  miniMapaInit = true;
+}
+
+// ── Crear punto ──────────────────────────────────────────────
+document.getElementById("form-punto").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn      = document.getElementById("btn-crear-punto");
+  const msgOk    = document.getElementById("msg-ok-punto");
+  const msgError = document.getElementById("msg-error-punto");
+  msgOk.style.display = "none"; msgError.style.display = "none";
+
+  const lat = parseFloat(document.getElementById("inp-lat").value.replace(",", "."));
+  const lng = parseFloat(document.getElementById("inp-lng").value.replace(",", "."));
+  if (isNaN(lat) || isNaN(lng)) {
+    msgError.textContent = "Haz clic en el mapa para establecer las coordenadas.";
+    msgError.style.display = "block"; return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Creando…';
+
+  try {
+    const res = await fetch(API_BASE + "/puntos/", {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "Authorization":"Bearer " + TOKEN_USE },
+      body: JSON.stringify({
+        nombre:     document.getElementById("inp-nombre").value.trim(),
+        tipo_fuente:document.getElementById("inp-tipo").value,
+        comunidad:  document.getElementById("inp-comunidad").value.trim(),
+        latitud:    lat,
+        longitud:   lng,
+      }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.detail || "Error " + res.status);
+    }
+    const nuevo = await res.json();
+    msgOk.textContent = "✔ Punto «" + nuevo.nombre + "» creado correctamente.";
+    msgOk.style.display = "block";
+    document.getElementById("form-punto").reset();
+    if (marcadorSel) { try { miniMapa.removeLayer(marcadorSel); } catch(_){} marcadorSel = null; }
+    document.getElementById("lbl-coords").textContent = "sin seleccionar";
+    await cargarPuntos();
+  } catch(err) {
+    msgError.textContent = err.message; msgError.style.display = "block";
+  } finally {
+    btn.disabled = false; btn.textContent = "＋ Crear punto";
+  }
+});
+
+// ── Service Worker ───────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/view/sw.js", { scope: "/view/" })
+    .then(r => console.log("[SW] listo:", r.scope))
+    .catch(e => console.warn("[SW]", e));
+}
+
+// ── Init ─────────────────────────────────────────────────────
 cargarPuntos();
+actualizarUI();
 </script>
 </body>
 </html>

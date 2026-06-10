@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>RuralH₂O — Campo</title>
+
+  <link rel="manifest" href="/view/manifest.json" />
+  <meta name="theme-color" content="#0056b3" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="RuralH2O" />
+  <link rel="apple-touch-icon" href="/view/icon-192.png" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0f1923; --card:#0d1b2a; --border:#1e3a5f; --input:#1a2e45;
+      --text:#e2e8f0; --muted:#64748b; --blue:#38bdf8; --green:#4ade80;
+      --yellow:#facc15; --red:#f87171; --nav-h:62px;
+    }
+    body {
+      font-family:'Segoe UI',system-ui,sans-serif;
+      background:var(--bg); color:var(--text);
+      min-height:100dvh; display:flex; flex-direction:column;
+      overscroll-behavior:none;
+    }
+
+    /* TOPBAR */
+    #topbar {
+      background:var(--card); padding:10px 16px;
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between;
+      flex-shrink:0; position:sticky; top:0; z-index:50;
+    }
+    #topbar h1 { font-size:.95rem; font-weight:700; color:var(--blue); }
+    #topbar-sub { font-size:.67rem; color:var(--muted); margin-top:1px; }
+    .badge-top {
+      display:none; font-size:.66rem; font-weight:700; padding:2px 7px;
+      border-radius:999px; margin-left:5px;
+    }
+    .badge-top.visible { display:inline-block; }
+    #badge-med { background:#713f12; color:var(--yellow); border:1px solid #ca8a04; }
+    #badge-pts { background:#1e3a5f; color:var(--blue);   border:1px solid #0369a1; }
+    #btn-logout {
+      font-size:.75rem; color:var(--muted); cursor:pointer;
+      padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:none;
+    }
+
+    /* OFFLINE BANNER */
+    #banner-offline {
+      display:none; background:#7f1d1d; color:#fca5a5;
+      font-size:.75rem; font-weight:600; text-align:center; padding:6px 12px;
+    }
+    #banner-offline.visible { display:block; }
+
+    /* CONTENIDO */
+    #contenido {
+      flex:1; overflow-y:auto; padding:14px;
+      padding-bottom:calc(var(--nav-h) + 14px);
+    }
+
+    /* NAV INFERIOR */
+    #nav-bottom {
+      position:fixed; bottom:0; left:0; right:0; height:var(--nav-h);
+      background:var(--card); border-top:1px solid var(--border);
+      display:flex; z-index:50;
+    }
+    .nav-btn {
+      flex:1; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:3px;
+      cursor:pointer; border:none; background:none;
+      color:var(--muted); font-size:.61rem; font-weight:600;
+      text-transform:uppercase; letter-spacing:.4px; transition:color .2s;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .nav-btn .icon { font-size:1.3rem; line-height:1; }
+    .nav-btn.activo { color:var(--blue); }
+
+    /* PANTALLAS */
+    .pantalla { display:none; }
+    .pantalla.activa { display:block; }
+
+    /* CARDS */
+    .card {
+      background:var(--card); border:1px solid var(--border);
+      border-radius:12px; padding:16px; margin-bottom:12px;
+    }
+    .card-titulo {
+      font-size:.68rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:.7px; color:var(--muted); margin-bottom:13px;
+    }
+
+    /* FORM */
+    .campo { margin-bottom:11px; }
+    .campo label {
+      display:block; font-size:.67rem; font-weight:700;
+      color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px;
+    }
+    .campo input, .campo select {
+      width:100%; background:var(--input); border:1px solid #2d4f6e;
+      color:var(--text); padding:11px 12px; border-radius:8px;
+      font-size:1rem; outline:none; appearance:none; transition:border-color .2s;
+    }
+    .campo input:focus, .campo select:focus { border-color:var(--blue); }
+    .hint { font-size:.65rem; color:var(--muted); margin-top:3px; }
+    .hint.ok   { color:var(--green); }
+    .hint.warn { color:var(--yellow); }
+    .hint.crit { color:var(--red); }
+    .params-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; }
+
+    /* PREVIEW NCh409 */
+    #preview-estado {
+      background:var(--input); border-radius:8px; padding:11px;
+      margin-bottom:13px; display:none;
+    }
+    .pre-titulo { font-size:.63rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:.5px; color:var(--muted); margin-bottom:7px; }
+    .pre-fila { display:flex; justify-content:space-between; font-size:.78rem; margin-bottom:4px; }
+    .pre-llave { color:#94a3b8; }
+    .badge { padding:2px 10px; border-radius:999px; font-size:.7rem; font-weight:700; }
+    .col-green  { background:#14532d; color:var(--green); }
+    .col-yellow { background:#713f12; color:var(--yellow); }
+    .col-red    { background:#7f1d1d; color:var(--red); }
+    .col-gray   { background:#374151; color:#9ca3af; }
+
+    /* SYNC PANEL */
+    #sync-panel {
+      background:rgba(113,63,18,.15); border:1px solid #ca8a04;
+      border-radius:10px; padding:13px; margin-bottom:12px; display:none;
+    }
+    #sync-panel.visible { display:block; }
+    #sync-titulo { font-size:.78rem; font-weight:700; color:var(--yellow); margin-bottom:4px; }
+    #sync-detalle { font-size:.7rem; color:#ca8a04; margin-bottom:8px; }
+    #btn-sync {
+      width:100%; padding:9px; border-radius:7px; border:1px solid #ca8a04;
+      background:rgba(113,63,18,.3); color:var(--yellow); font-size:.8rem;
+      font-weight:700; cursor:pointer;
+    }
+
+    /* BOTONES */
+    .btn {
+      width:100%; padding:13px; border-radius:10px; border:none;
+      font-size:.92rem; font-weight:700; cursor:pointer; transition:.2s;
+    }
+    .btn-blue  { background:#0ea5e9; color:#fff; }
+    .btn-blue:hover  { background:var(--blue); }
+    .btn-blue:disabled  { background:var(--input); color:var(--muted); cursor:not-allowed; }
+    .btn-green { background:#15803d; color:#fff; }
+    .btn-green:hover { background:#16a34a; }
+    .btn-green:disabled { background:var(--input); color:var(--muted); cursor:not-allowed; }
+
+    /* MENSAJES */
+    .mensaje {
+      margin-top:11px; padding:10px 13px; border-radius:8px;
+      font-size:.82rem; display:none; line-height:1.4;
+    }
+    .mensaje.ok    { background:rgba(74,222,128,.1); border:1px solid #16a34a; color:var(--green); }
+    .mensaje.error { background:rgba(239,68,68,.1);  border:1px solid #ef4444; color:#fca5a5; }
+
+    /* SPINNER */
+    .spinner {
+      display:inline-block; width:13px; height:13px;
+      border:2px solid rgba(255,255,255,.3); border-top-color:#fff;
+      border-radius:50%; animation:spin .6s linear infinite;
+      vertical-align:middle; margin-right:6px;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* LISTA PUNTOS */
+    .punto-item {
+      background:var(--card); border:1px solid var(--border);
+      border-radius:10px; padding:13px; margin-bottom:9px;
+      display:flex; align-items:flex-start; gap:11px;
+    }
+    .punto-dot { width:13px; height:13px; border-radius:50%; flex-shrink:0; margin-top:3px; }
+    .dot-green{background:var(--green);} .dot-yellow{background:var(--yellow);}
+    .dot-red{background:var(--red);}     .dot-gray{background:#6b7280;}
+    .dot-pending{background:#38bdf8; animation:pulse 1.5s infinite;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+    .punto-info { flex:1; min-width:0; }
+    .punto-nombre { font-size:.87rem; font-weight:700;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .punto-meta   { font-size:.71rem; color:var(--muted); margin-top:2px; }
+    .punto-valores{ font-size:.71rem; color:#94a3b8; margin-top:4px; }
+    .punto-estado { font-size:.63rem; font-weight:700; padding:3px 8px;
+      border-radius:999px; flex-shrink:0; }
+    .est-green{background:#14532d;color:var(--green);}
+    .est-yellow{background:#713f12;color:var(--yellow);}
+    .est-red{background:#7f1d1d;color:var(--red);}
+    .est-gray{background:#374151;color:#9ca3af;}
+    .est-pending{background:#1e3a5f;color:var(--blue);}
+
+    /* MAPA */
+    #btn-gps {
+      width:100%; padding:16px; border-radius:12px; border:2px solid #0369a1;
+      background:#0c4a6e; color:var(--blue); font-size:1.05rem; font-weight:700;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      gap:10px; margin-bottom:12px; transition:background .2s;
+    }
+    #btn-gps:active { background:#0369a1; }
+    #btn-gps .gps-icon { font-size:1.4rem; }
+    #mapa-nuevo {
+      height:260px; border-radius:10px; overflow:hidden;
+      border:1px solid #2d4f6e; margin-bottom:10px;
+    }
+    #coords-display {
+      background:var(--input); border-radius:8px; padding:10px 12px;
+      font-size:.78rem; color:var(--muted); margin-bottom:12px;
+      display:flex; align-items:center; gap:8px;
+    }
+    #lbl-coords { color:var(--blue); font-weight:700; font-size:.82rem; }
+
+    #btn-ir-registrar {
+      width:100%; padding:12px; border-radius:10px; border:2px solid #0369a1;
+      background:#0c4a6e; color:var(--blue); font-size:.9rem; font-weight:700;
+      cursor:pointer; margin-top:6px; display:none;
+    }
+
+
+    /* PRE-CACHE MAPA OFFLINE */
+    #btn-precache {
+      width:100%; padding:13px; border-radius:10px;
+      border:2px solid #0369a1; background:#0c4a6e;
+      color:var(--blue); font-size:.88rem; font-weight:700;
+      cursor:pointer; display:flex; align-items:center;
+      justify-content:center; gap:9px; margin-bottom:10px;
+      transition:background .2s;
+    }
+    #btn-precache:active { background:#0369a1; }
+    #btn-precache:disabled { background:var(--input); color:var(--muted);
+      border-color:#2d4f6e; cursor:not-allowed; }
+    #precache-wrap {
+      background:rgba(3,105,161,.1); border:1px solid #0369a1;
+      border-radius:8px; padding:11px 13px; margin-bottom:10px; display:none;
+    }
+    #precache-wrap.visible { display:block; }
+    #precache-label { font-size:.72rem; color:var(--blue); font-weight:600;
+      margin-bottom:6px; }
+    #precache-bar-bg {
+      background:#1a2e45; border-radius:999px; height:7px; overflow:hidden;
+    }
+    #precache-bar {
+      background:#0ea5e9; height:7px; border-radius:999px;
+      width:0%; transition:width .3s;
+    }
+    #precache-count { font-size:.68rem; color:var(--muted); margin-top:5px; }
+
+    .cargando { text-align:center; color:var(--muted); padding:28px 0; font-size:.84rem; }
+
+    /* AVISO OFFLINE PUNTOS */
+    .offline-note {
+      background:rgba(56,189,248,.08); border:1px solid #0369a1;
+      border-radius:8px; padding:10px 13px; font-size:.76rem;
+      color:var(--blue); margin-bottom:10px; display:none;
+    }
+    .offline-note.visible { display:block; }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <div style="display:flex;align-items:center">
+      <h1>💧 RuralH₂O</h1>
+      <span id="badge-med" class="badge-top">⏳ 0</span>
+      <span id="badge-pts" class="badge-top">📍 0</span>
+    </div>
+    <div id="topbar-sub">Monitoreo NCh 409 · Aysén</div>
+  </div>
+  <button id="btn-logout" onclick="cerrarSesion()">Salir</button>
+</div>
+
+<div id="banner-offline">📵 Sin conexión — los datos se guardan localmente</div>
+
+<div id="contenido">
+
+  <!-- REGISTRAR -->
+  <div id="pant-registrar" class="pantalla activa">
+    <div id="sync-panel">
+      <div id="sync-titulo">⏳ Datos pendientes de sincronizar</div>
+      <div id="sync-detalle"></div>
+      <button id="btn-sync" onclick="sincronizarTodo()">↑ Sincronizar ahora</button>
+    </div>
+
+    <div class="card">
+      <div class="card-titulo">📋 Nueva medición</div>
+      <form id="form-medicion" autocomplete="off">
+        <div class="campo">
+          <label for="sel-punto">Punto de monitoreo</label>
+          <select id="sel-punto" required>
+            <option value="">Cargando…</option>
+          </select>
+        </div>
+        <div class="params-grid">
+          <div class="campo">
+            <label for="inp-ph">pH</label>
+            <input type="number" id="inp-ph" step="0.1" min="0" max="14"
+                   placeholder="7.0" inputmode="decimal" required />
+            <div class="hint" id="hint-ph">6.5 – 8.5</div>
+          </div>
+          <div class="campo">
+            <label for="inp-cloro">Cloro mg/L</label>
+            <input type="number" id="inp-cloro" step="0.1" min="0" max="5"
+                   placeholder="1.0" inputmode="decimal" required />
+            <div class="hint" id="hint-cloro">0.2 – 2.0</div>
+          </div>
+          <div class="campo">
+            <label for="inp-turbidez">Turbidez NTU</label>
+            <input type="number" id="inp-turbidez" step="0.1" min="0"
+                   placeholder="2.0" inputmode="decimal" required />
+            <div class="hint" id="hint-turbidez">≤ 5</div>
+          </div>
+        </div>
+        <div id="preview-estado">
+          <div class="pre-titulo">Vista previa NCh 409</div>
+          <div class="pre-fila">
+            <span class="pre-llave">Estado</span>
+            <span id="pre-color" class="badge col-gray">—</span>
+          </div>
+          <div class="pre-fila">
+            <span class="pre-llave">Apta para consumo</span>
+            <span id="pre-apta" style="font-weight:700">—</span>
+          </div>
+        </div>
+        <button type="submit" id="btn-enviar" class="btn btn-blue">Registrar medición</button>
+        <div class="mensaje ok"    id="msg-ok"></div>
+        <div class="mensaje error" id="msg-error"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PUNTOS -->
+  <div id="pant-puntos" class="pantalla">
+    <div class="offline-note" id="nota-offline-pts">
+      📵 Sin conexión — mostrando última lista guardada + puntos pendientes locales
+    </div>
+    <div class="card-titulo" style="margin-bottom:10px">📍 Puntos de monitoreo</div>
+    <div id="lista-puntos"><div class="cargando">Cargando…</div></div>
+  </div>
+
+  <!-- NUEVO PUNTO -->
+  <div id="pant-nuevo" class="pantalla">
+    <button id="btn-gps" onclick="usarGPS()">
+      <span class="gps-icon">📡</span>Usar mi ubicación GPS
+    </button>
+
+    <button id="btn-precache" onclick="precargarTiles()">
+      <span>📥</span>Preparar mapa para uso sin internet
+    </button>
+    <div id="precache-wrap">
+      <div id="precache-label">Descargando tiles…</div>
+      <div id="precache-bar-bg"><div id="precache-bar"></div></div>
+      <div id="precache-count"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-titulo">📍 Toca el mapa para ubicar el punto</div>
+      <div id="mapa-nuevo"></div>
+      <div id="coords-display">
+        <span>📍</span>
+        <div>
+          <div id="lbl-coords">Sin seleccionar</div>
+          <div style="font-size:.7rem;color:var(--muted)">Toca el mapa o usa el botón GPS</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-titulo">✏️ Datos del punto</div>
+      <form id="form-nuevo-punto" autocomplete="off">
+        <div class="campo">
+          <label for="np-nombre">Nombre del punto *</label>
+          <input type="text" id="np-nombre" placeholder="Ej: Río Alto" required />
+        </div>
+        <div class="campo">
+          <label for="np-tipo">Tipo de fuente *</label>
+          <select id="np-tipo" required>
+            <option value="">— Seleccionar —</option>
+            <option value="pozo">🕳 Pozo</option>
+            <option value="vertiente">💧 Vertiente</option>
+            <option value="río">🏞 Río</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="np-comunidad">Comunidad *</label>
+          <input type="text" id="np-comunidad" placeholder="Ej: Villa Aysén" required />
+        </div>
+        <button type="submit" id="btn-crear" class="btn btn-green">＋ Crear punto</button>
+        <div class="mensaje ok"    id="np-msg-ok"></div>
+        <div class="mensaje error" id="np-msg-error"></div>
+        <button type="button" id="btn-ir-registrar" onclick="irARegistrar()">
+          📋 Ir a registrar parámetros →
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<div id="nav-bottom">
+  <button class="nav-btn activo" id="nav-registrar" onclick="cambiarPantalla('registrar')">
+    <span class="icon">📋</span>Registrar
+  </button>
+  <button class="nav-btn" id="nav-puntos" onclick="cambiarPantalla('puntos')">
+    <span class="icon">📍</span>Puntos
+  </button>
+  <button class="nav-btn" id="nav-nuevo" onclick="cambiarPantalla('nuevo')">
+    <span class="icon">➕</span>Nuevo
+  </button>
+</div>
+
+<script>
+"use strict";
+
+const API_BASE  = window.location.origin;
+const TOKEN     = sessionStorage.getItem("token") || localStorage.getItem("ruralh2o_token");
+if (!TOKEN) { window.location.replace("login.html"); }
+if (TOKEN)  localStorage.setItem("ruralh2o_token", TOKEN);
+const TOKEN_USE = TOKEN || "";
+
+// ── Control de rol ───────────────────────────────────────────
+// El visualizador NO puede registrar mediciones ni crear puntos:
+// solo tiene acceso de lectura a la lista de puntos.
+const USER_ROL = sessionStorage.getItem("user_rol") || "";
+const SOLO_LECTURA = USER_ROL === "visualizador";
+
+if (SOLO_LECTURA) {
+  // Ocultar las pestañas de acción (Registrar y Nuevo punto)
+  ["nav-registrar", "nav-nuevo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  });
+}
+
+// ── Navegación ───────────────────────────────────────────────
+function cambiarPantalla(n) {
+  // Bloquear pantallas de escritura para el rol visualizador
+  if (SOLO_LECTURA && (n === "registrar" || n === "nuevo")) {
+    n = "puntos";
+  }
+  document.querySelectorAll(".pantalla").forEach(p=>p.classList.remove("activa"));
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("activo"));
+  document.getElementById("pant-"+n).classList.add("activa");
+  document.getElementById("nav-"+n).classList.add("activo");
+  if (n==="puntos") cargarListaPuntos();
+  if (n==="nuevo")  iniciarMapaNuevo();
+}
+function cerrarSesion() {
+  sessionStorage.clear(); localStorage.removeItem("ruralh2o_token");
+  window.location.replace("login.html");
+}
+
+// ── NCh 409 ──────────────────────────────────────────────────
+const NCH={
+  ph:{ok:[6.5,8.5],warn:[6.0,9.0]},
+  cloro:{ok:[0.2,2.0],warn:[0.0,3.0]},
+  turbidez:{ok:[0,5.0],warn:[0,10.0]},
+};
+function clasificar(p,v){
+  const r=NCH[p];
+  if(v>=r.ok[0]&&v<=r.ok[1])return"ok";
+  if(v>=r.warn[0]&&v<=r.warn[1])return"warn";
+  return"crit";
+}
+function actualizarHint(id,param,v){
+  const el=document.getElementById(id);
+  const def={ph:"6.5 – 8.5",cloro:"0.2 – 2.0",turbidez:"≤ 5"};
+  if(isNaN(v)){el.className="hint";el.textContent=def[param];return;}
+  const cls=clasificar(param,v);
+  el.textContent={ok:"Normal",warn:"Zona límite",crit:"Fuera de norma"}[cls];
+  el.className="hint "+cls;
+}
+function actualizarPreview(){
+  const ph=parseFloat(document.getElementById("inp-ph").value);
+  const clo=parseFloat(document.getElementById("inp-cloro").value);
+  const tur=parseFloat(document.getElementById("inp-turbidez").value);
+  actualizarHint("hint-ph","ph",ph);
+  actualizarHint("hint-cloro","cloro",clo);
+  actualizarHint("hint-turbidez","turbidez",tur);
+  if(isNaN(ph)||isNaN(clo)||isNaN(tur)){
+    document.getElementById("preview-estado").style.display="none";return;
+  }
+  document.getElementById("preview-estado").style.display="block";
+  const clss=[clasificar("ph",ph),clasificar("cloro",clo),clasificar("turbidez",tur)];
+  const hayCrit=clss.includes("crit"), hayWarn=clss.includes("warn");
+  const pc=document.getElementById("pre-color"), pa=document.getElementById("pre-apta");
+  if(hayCrit){pc.textContent="No apta";pc.className="badge col-red";pa.textContent="No";pa.style.color="#f87171";}
+  else if(hayWarn){pc.textContent="Advertencia";pc.className="badge col-yellow";pa.textContent="Sí (límite)";pa.style.color="#facc15";}
+  else{pc.textContent="Apta";pc.className="badge col-green";pa.textContent="Sí";pa.style.color="#4ade80";}
+}
+["inp-ph","inp-cloro","inp-turbidez"].forEach(id=>
+  document.getElementById(id).addEventListener("input",actualizarPreview)
+);
+
+// ── IndexedDB ────────────────────────────────────────────────
+const IDB_NAME="ruralh2o_offline";
+const ST_MED="mediciones_pendientes";
+const ST_PTS="puntos_pendientes";
+
+function abrirIDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(IDB_NAME,2);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(ST_MED))
+        db.createObjectStore(ST_MED,{keyPath:"id",autoIncrement:true});
+      if(!db.objectStoreNames.contains(ST_PTS))
+        db.createObjectStore(ST_PTS,{keyPath:"id",autoIncrement:true});
+    };
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+
+async function idbAdd(store,data){
+  const db=await abrirIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(store,"readwrite");
+    const req=tx.objectStore(store).add({...data,timestamp:Date.now()});
+    req.onsuccess=e=>res(e.target.result); // devuelve el id generado
+    tx.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbGetAll(store){
+  const db=await abrirIDB();
+  return new Promise((res,rej)=>{
+    const req=db.transaction(store,"readonly").objectStore(store).getAll();
+    req.onsuccess=e=>res(e.target.result);
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbDelete(store,id){
+  const db=await abrirIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(store,"readwrite");
+    tx.objectStore(store).delete(id);
+    tx.oncomplete=res; tx.onerror=e=>rej(e.target.error);
+  });
+}
+async function idbPut(store,data){
+  const db=await abrirIDB();
+  return new Promise((res,rej)=>{
+    const tx=db.transaction(store,"readwrite");
+    tx.objectStore(store).put(data);
+    tx.oncomplete=res; tx.onerror=e=>rej(e.target.error);
+  });
+}
+
+// ── UI pendientes ────────────────────────────────────────────
+async function actualizarUI(){
+  const meds=await idbGetAll(ST_MED);
+  const pts =await idbGetAll(ST_PTS);
+  const nm=meds.length, np=pts.length;
+
+  const badgeMed=document.getElementById("badge-med");
+  const badgePts=document.getElementById("badge-pts");
+  const panel   =document.getElementById("sync-panel");
+  const detalle =document.getElementById("sync-detalle");
+
+  badgeMed.textContent="⏳ "+nm+" med."; badgeMed.classList.toggle("visible",nm>0);
+  badgePts.textContent="📍 "+np+" pts."; badgePts.classList.toggle("visible",np>0);
+  panel.classList.toggle("visible",nm>0||np>0);
+
+  const partes=[];
+  if(np>0) partes.push(np+" punto(s) nuevos pendientes");
+  if(nm>0) partes.push(nm+" medición(es) pendientes");
+  detalle.textContent=partes.join(" · ");
+
+  document.getElementById("banner-offline").classList.toggle("visible",!navigator.onLine);
+}
+
+// ── Cargar selector de puntos (online + offline) ─────────────
+async function cargarPuntos(){
+  const sel=document.getElementById("sel-punto");
+  const puntosPendientes=await idbGetAll(ST_PTS);
+
+  try{
+    const res=await fetch(API_BASE+"/puntos/");
+    const puntos=await res.json();
+    sel.innerHTML='<option value="">— Selecciona un punto —</option>';
+    // Puntos del servidor
+    puntos.forEach(p=>{
+      const opt=document.createElement("option");
+      opt.value=p.id;
+      opt.textContent=p.nombre+" · "+p.comunidad;
+      sel.appendChild(opt);
+    });
+  }catch(_){
+    sel.innerHTML='<option value="">— Selecciona un punto —</option>';
+  }
+
+  // Agregar puntos offline locales (tempId como valor)
+  puntosPendientes.forEach(p=>{
+    const opt=document.createElement("option");
+    opt.value="tmp_"+p.id;
+    opt.textContent="⏳ "+p.nombre+" · "+p.comunidad+" (pendiente)";
+    opt.style.color="#facc15";
+    sel.appendChild(opt);
+  });
+}
+
+// ── Lista de puntos ──────────────────────────────────────────
+async function cargarListaPuntos(){
+  const lista=document.getElementById("lista-puntos");
+  const notaOffline=document.getElementById("nota-offline-pts");
+  lista.innerHTML='<div class="cargando">Cargando…</div>';
+  const LABEL={green:"APTA",yellow:"ADVERTENCIA",red:"NO APTA",gray:"SIN DATOS"};
+  const ECLS={green:"est-green",yellow:"est-yellow",red:"est-red",gray:"est-gray"};
+  const DCLS={green:"dot-green",yellow:"dot-yellow",red:"dot-red",gray:"dot-gray"};
+
+  let puntosServidor=[];
+  try{
+    const res=await fetch(API_BASE+"/mapa/puntos-calidad");
+    puntosServidor=await res.json();
+    notaOffline.classList.remove("visible");
+  }catch(_){
+    notaOffline.classList.add("visible");
+  }
+
+  const puntosPendientes=await idbGetAll(ST_PTS);
+
+  const htmlServidor=puntosServidor.map(p=>{
+    const u=p.medicion;  // el backend devuelve "medicion", no "ultima_medicion"
+    const vals=u
+      ?"pH "+u.ph.toFixed(1)+" · Cloro "+u.cloro.toFixed(1)+" · Turb. "+u.turbidez.toFixed(1)+" · "+u.fecha
+      :"Sin mediciones";
+    return "<div class='punto-item'>"+
+      "<div class='punto-dot "+DCLS[p.color]+"'></div>"+
+      "<div class='punto-info'>"+
+        "<div class='punto-nombre'>"+p.nombre+"</div>"+
+        "<div class='punto-meta'>"+p.comunidad+" · "+p.tipo_fuente+"</div>"+
+        "<div class='punto-valores'>"+vals+"</div>"+
+      "</div>"+
+      "<span class='punto-estado "+ECLS[p.color]+"'>"+LABEL[p.color]+"</span>"+
+      "</div>";
+  }).join("");
+
+  const htmlPendientes=puntosPendientes.map(p=>
+    "<div class='punto-item'>"+
+    "<div class='punto-dot dot-pending'></div>"+
+    "<div class='punto-info'>"+
+      "<div class='punto-nombre'>"+p.nombre+"</div>"+
+      "<div class='punto-meta'>"+p.comunidad+" · "+p.tipo_fuente+"</div>"+
+      "<div class='punto-valores' style='color:#facc15'>⏳ Creado offline — pendiente de sync</div>"+
+    "</div>"+
+    "<span class='punto-estado est-pending'>PENDIENTE</span>"+
+    "</div>"
+  ).join("");
+
+  if(!puntosServidor.length&&!puntosPendientes.length){
+    lista.innerHTML='<div class="cargando">Sin puntos registrados</div>';
+  } else {
+    lista.innerHTML=htmlPendientes+htmlServidor;
+  }
+}
+
+// ── SINCRONIZACIÓN COMPLETA ──────────────────────────────────
+// Orden: 1) puntos pendientes → 2) actualizar temp IDs en mediciones → 3) mediciones
+async function sincronizarTodo(){
+  const btn=document.getElementById("btn-sync");
+  btn.innerHTML='<span class="spinner"></span>Sincronizando…'; btn.disabled=true;
+
+  let ptsOk=0, medsOk=0;
+
+  // 1) Sincronizar puntos pendientes
+  const puntosPend=await idbGetAll(ST_PTS);
+  const mapaIds={}; // {tempId: realId}
+
+  for(const p of puntosPend){
+    try{
+      const res=await fetch(API_BASE+"/puntos/",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+TOKEN_USE},
+        body:JSON.stringify({
+          nombre:p.nombre, tipo_fuente:p.tipo_fuente,
+          comunidad:p.comunidad, latitud:p.latitud, longitud:p.longitud,
+        }),
+      });
+      if(res.ok){
+        const nuevo=await res.json();
+        mapaIds["tmp_"+p.id]=nuevo.id; // mapear tempId → realId
+        await idbDelete(ST_PTS,p.id);
+        ptsOk++;
+      }
+    }catch(_){ break; }
+  }
+
+  // 2) Actualizar mediciones que referencian tempIds
+  if(Object.keys(mapaIds).length>0){
+    const medsPend=await idbGetAll(ST_MED);
+    for(const m of medsPend){
+      const tempId=String(m.punto_id);
+      if(mapaIds[tempId]!==undefined){
+        await idbPut(ST_MED,{...m, punto_id:mapaIds[tempId]});
+      }
+    }
+  }
+
+  // 3) Sincronizar mediciones
+  const medsPend2=await idbGetAll(ST_MED);
+  for(const m of medsPend2){
+    // Saltar si aún tiene un tempId sin resolver (punto no sincronizado todavía)
+    if(String(m.punto_id).startsWith("tmp_")) continue;
+    try{
+      const res=await fetch(API_BASE+"/mediciones/",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+TOKEN_USE},
+        body:JSON.stringify({ph:m.ph,cloro:m.cloro,turbidez:m.turbidez,punto_id:m.punto_id}),
+      });
+      if(res.ok){ await idbDelete(ST_MED,m.id); medsOk++; }
+    }catch(_){ break; }
+  }
+
+  await actualizarUI();
+  await cargarPuntos();
+  btn.textContent="↑ Sincronizar ahora"; btn.disabled=false;
+
+  if(ptsOk>0||medsOk>0){
+    const msgOk=document.getElementById("msg-ok");
+    const partes=[];
+    if(ptsOk>0) partes.push(ptsOk+" punto(s)");
+    if(medsOk>0) partes.push(medsOk+" medición(es)");
+    msgOk.textContent="✔ Sincronizado: "+partes.join(" y ")+" enviados al servidor.";
+    msgOk.style.display="block";
+    setTimeout(()=>{ msgOk.style.display="none"; },5000);
+  }
+}
+
+window.addEventListener("online", async()=>{ await actualizarUI(); await sincronizarTodo(); });
+window.addEventListener("offline", actualizarUI);
+
+// ── Enviar medición ──────────────────────────────────────────
+document.getElementById("form-medicion").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const btn=document.getElementById("btn-enviar");
+  const msgOk=document.getElementById("msg-ok");
+  const msgError=document.getElementById("msg-error");
+  msgOk.style.display="none"; msgError.style.display="none";
+
+  const puntoVal=document.getElementById("sel-punto").value;
+  if(!puntoVal){ msgError.textContent="Selecciona un punto."; msgError.style.display="block"; return; }
+
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Registrando…';
+
+  const datos={
+    ph:parseFloat(document.getElementById("inp-ph").value),
+    cloro:parseFloat(document.getElementById("inp-cloro").value),
+    turbidez:parseFloat(document.getElementById("inp-turbidez").value),
+    punto_id: puntoVal.startsWith("tmp_") ? puntoVal : parseInt(puntoVal),
+  };
+
+  try{
+    // Si el punto es offline o no hay conexión → guardar en IDB
+    if(!navigator.onLine || puntoVal.startsWith("tmp_")) throw new Error("__OFFLINE__");
+
+    const res=await fetch(API_BASE+"/mediciones/",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+TOKEN_USE},
+      body:JSON.stringify(datos),
+    });
+    if(!res.ok){ const d=await res.json().catch(()=>({})); throw new Error(d.detail||"Error "+res.status); }
+    const nueva=await res.json();
+    msgOk.textContent="✔ Medición registrada — "+(nueva.apta?"Agua APTA ✔":"Agua NO APTA ✘");
+    msgOk.style.display="block";
+    limpiarFormulario();
+  }catch(err){
+    if(err.message==="__OFFLINE__"||err.name==="TypeError"){
+      await idbAdd(ST_MED,datos);
+      await actualizarUI();
+      const esPtoOffline=puntoVal.startsWith("tmp_");
+      msgOk.textContent= esPtoOffline
+        ? "📵 Guardado para punto offline — se enviará todo junto al sincronizar."
+        : "📵 Sin conexión — guardado localmente. Se enviará al volver online.";
+      msgOk.style.display="block";
+      limpiarFormulario();
+    }else{
+      msgError.textContent=err.message; msgError.style.display="block";
+    }
+  }finally{
+    btn.disabled=false; btn.textContent="Registrar medición";
+  }
+});
+
+function limpiarFormulario(){
+  ["inp-ph","inp-cloro","inp-turbidez"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("preview-estado").style.display="none";
+}
+
+// ── MAPA NUEVO PUNTO ─────────────────────────────────────────
+let mapaInit=false, mapaLeaflet=null, marcadorNuevo=null;
+let coordsSel={lat:null,lng:null};
+let ultimoPuntoVal=null;
+
+function iniciarMapaNuevo(){
+  if(mapaInit){ setTimeout(()=>mapaLeaflet.invalidateSize(),100); return; }
+  mapaLeaflet=L.map("mapa-nuevo",{
+    center:[-45.57,-72.07], zoom:9,
+    maxBounds:L.latLngBounds(L.latLng(-49.8,-76.5),L.latLng(-43.3,-70.5)),
+  });
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    attribution:"© OpenStreetMap", maxZoom:18,
+  }).addTo(mapaLeaflet);
+  mapaLeaflet.on("click",e=>colocarMarcador(e.latlng.lat,e.latlng.lng));
+  mapaInit=true;
+  setTimeout(()=>mapaLeaflet.invalidateSize(),200);
+}
+
+function colocarMarcador(lat,lng){
+  if(marcadorNuevo) mapaLeaflet.removeLayer(marcadorNuevo);
+  marcadorNuevo=L.marker([lat,lng],{
+    icon:L.divIcon({
+      className:"", iconSize:[28,28], iconAnchor:[14,14],
+      html:`<div style="width:28px;height:28px;border-radius:50%;background:#38bdf8;border:3px solid white;box-shadow:0 0 0 4px rgba(56,189,248,.4)"></div>`,
+    })
+  }).addTo(mapaLeaflet);
+  coordsSel={lat,lng};
+  document.getElementById("lbl-coords").textContent=lat.toFixed(5)+", "+lng.toFixed(5);
+}
+
+function usarGPS(){
+  const btn=document.getElementById("btn-gps");
+  btn.innerHTML='<span class="spinner"></span> Obteniendo ubicación…'; btn.disabled=true;
+  if(!navigator.geolocation){
+    btn.innerHTML='<span class="gps-icon">📡</span> Usar mi ubicación GPS'; btn.disabled=false;
+    alert("Tu navegador no soporta geolocalización"); return;
+  }
+  if(!mapaInit) iniciarMapaNuevo();
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      const lat=pos.coords.latitude, lng=pos.coords.longitude;
+      colocarMarcador(lat,lng);
+      mapaLeaflet.setView([lat,lng],15);
+      btn.innerHTML='<span class="gps-icon">✅</span> Ubicación capturada';
+      btn.style.cssText="background:#14532d;border-color:#16a34a;color:#4ade80";
+      setTimeout(()=>{
+        btn.innerHTML='<span class="gps-icon">📡</span> Usar mi ubicación GPS';
+        btn.style.cssText=""; btn.disabled=false;
+      },2500);
+    },
+    err=>{
+      btn.innerHTML='<span class="gps-icon">📡</span> Usar mi ubicación GPS'; btn.disabled=false;
+      alert("GPS: "+({1:"Permiso denegado",2:"No disponible",3:"Tiempo agotado"}[err.code]||"Error"));
+    },
+    {enableHighAccuracy:true,timeout:10000,maximumAge:0}
+  );
+}
+
+// ── Crear nuevo punto (con soporte offline) ──────────────────
+document.getElementById("form-nuevo-punto").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const btn=document.getElementById("btn-crear");
+  const msgOk=document.getElementById("np-msg-ok");
+  const msgErr=document.getElementById("np-msg-error");
+  msgOk.style.display="none"; msgErr.style.display="none";
+
+  if(!coordsSel.lat){ msgErr.textContent="Toca el mapa o usa GPS para fijar la ubicación."; msgErr.style.display="block"; return; }
+
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Creando…';
+
+  const datosPunto={
+    nombre:   document.getElementById("np-nombre").value.trim(),
+    tipo_fuente:document.getElementById("np-tipo").value,
+    comunidad:document.getElementById("np-comunidad").value.trim(),
+    latitud:  coordsSel.lat,
+    longitud: coordsSel.lng,
+  };
+
+  try{
+    if(!navigator.onLine) throw new Error("__OFFLINE__");
+
+    const res=await fetch(API_BASE+"/puntos/",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+TOKEN_USE},
+      body:JSON.stringify(datosPunto),
+    });
+    if(!res.ok){ const d=await res.json().catch(()=>({})); throw new Error(d.detail||"Error "+res.status); }
+    const nuevo=await res.json();
+    ultimoPuntoVal=String(nuevo.id);
+    msgOk.textContent="✔ Punto «"+nuevo.nombre+"» creado correctamente.";
+
+  }catch(err){
+    if(err.message==="__OFFLINE__"||err.name==="TypeError"){
+      // Guardar punto en IDB y obtener su id temporal
+      const tempIdbId=await idbAdd(ST_PTS,datosPunto);
+      ultimoPuntoVal="tmp_"+tempIdbId;
+      await actualizarUI();
+      msgOk.textContent="📵 Sin señal — «"+datosPunto.nombre+"» guardado localmente. Puedes registrar sus parámetros ahora.";
+    }else{
+      msgErr.textContent=err.message; msgErr.style.display="block";
+      btn.disabled=false; btn.textContent="＋ Crear punto"; return;
+    }
+  }
+
+  msgOk.style.display="block";
+  document.getElementById("btn-ir-registrar").style.display="block";
+
+  // Actualizar selector con el nuevo punto
+  await cargarPuntos();
+
+  // Limpiar
+  document.getElementById("form-nuevo-punto").reset();
+  if(marcadorNuevo){ mapaLeaflet.removeLayer(marcadorNuevo); marcadorNuevo=null; }
+  coordsSel={lat:null,lng:null};
+  document.getElementById("lbl-coords").textContent="Sin seleccionar";
+  btn.disabled=false; btn.textContent="＋ Crear punto";
+});
+
+function irARegistrar(){
+  if(ultimoPuntoVal){
+    const sel=document.getElementById("sel-punto");
+    sel.value=ultimoPuntoVal;
+  }
+  document.getElementById("btn-ir-registrar").style.display="none";
+  cambiarPantalla("registrar");
+  document.getElementById("inp-ph").focus();
+}
+
+
+// ── Conversión coordenadas → tile OSM ────────────────────────
+function lon2tile(lon, z) {
+  return Math.floor((lon + 180) / 360 * Math.pow(2, z));
+}
+function lat2tile(lat, z) {
+  const r = lat * Math.PI / 180;
+  return Math.floor(
+    (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z)
+  );
+}
+
+// ── Pre-caché de tiles OSM ────────────────────────────────────
+// Descarga tiles de la región Aysén (zoom 9-11) y del punto GPS (zoom 12-14)
+// y los guarda en el mismo caché del Service Worker para que estén
+// disponibles sin internet al hacer zoom en el mapa.
+async function precargarTiles() {
+  const btnPC  = document.getElementById("btn-precache");
+  const wrap   = document.getElementById("precache-wrap");
+  const bar    = document.getElementById("precache-bar");
+  const label  = document.getElementById("precache-label");
+  const count  = document.getElementById("precache-count");
+  btnPC.disabled = true;
+
+  // Construir lista de URLs
+  const urls = [];
+  const BASE = "https://a.tile.openstreetmap.org"; // subdominio canónico (el SW normaliza)
+
+  // Región Aysén — zoom 9-12
+  // Zoom 12 ya muestra nombres de ríos, lagos y accidentes geográficos principales
+  const bbox = { minLat:-47.5, maxLat:-44.5, minLng:-74.0, maxLng:-71.5 };
+  for (const z of [9, 10, 11, 12]) {
+    const xMin = lon2tile(bbox.minLng, z), xMax = lon2tile(bbox.maxLng, z);
+    const yMin = lat2tile(bbox.maxLat, z), yMax = lat2tile(bbox.minLat, z);
+    for (let x = xMin; x <= xMax; x++)
+      for (let y = yMin; y <= yMax; y++)
+        urls.push(`${BASE}/${z}/${x}/${y}.png`);
+  }
+
+  // Área GPS — zoom 12-15
+  // Zoom 13-15 muestra nombres de todos los ríos, canales, riachuelos y caminos
+  const gpsLat = coordsSel.lat, gpsLng = coordsSel.lng;
+  if (gpsLat && gpsLng) {
+    // Con GPS: área alrededor de la posición actual
+    for (const [z, R] of [[12, 4],[13, 7],[14, 10],[15, 14]]) {
+      const cx = lon2tile(gpsLng, z), cy = lat2tile(gpsLat, z);
+      for (let dx = -R; dx <= R; dx++)
+        for (let dy = -R; dy <= R; dy++)
+          urls.push(`${BASE}/${z}/${cx+dx}/${cy+dy}.png`);
+    }
+  } else {
+    // Sin GPS: centroide Aysén como fallback (zoom 12-14)
+    const cLat = -45.57, cLng = -72.07;
+    for (const [z, R] of [[12, 5],[13, 8],[14, 10]]) {
+      const cx = lon2tile(cLng, z), cy = lat2tile(cLat, z);
+      for (let dx = -R; dx <= R; dx++)
+        for (let dy = -R; dy <= R; dy++)
+          urls.push(`${BASE}/${z}/${cx+dx}/${cy+dy}.png`);
+    }
+  }
+
+  // Eliminar duplicados
+  const uniqueUrls = [...new Set(urls)];
+  const total = uniqueUrls.length;
+  let done = 0;
+
+  wrap.classList.add("visible");
+  // Estimar tiempo (~300 tiles/min con conexión normal)
+  const minEst = Math.ceil(total / 300);
+  label.textContent = "Descargando " + total + " sectores del mapa (~" + minEst + " min)…";
+  count.textContent = "0 / " + total;
+  bar.style.width = "0%";
+
+  // Abrir caché del SW directamente
+  let cache;
+  try { cache = await caches.open("ruralh2o-v5"); }
+  catch (_) { label.textContent = "⚠ Cache no disponible"; btnPC.disabled=false; return; }
+
+  // Descargar en tandas de 8 (más rápido con mayor paralelismo)
+  for (let i = 0; i < uniqueUrls.length; i += 8) {
+    const batch = uniqueUrls.slice(i, i + 8);
+    await Promise.all(batch.map(async url => {
+      try {
+        const already = await cache.match(url);
+        if (!already) {
+          const res = await fetch(url, { mode:"cors" });
+          if (res && res.status === 200) await cache.put(url, res);
+        }
+      } catch (_) {}
+      done++;
+    }));
+    bar.style.width = Math.round(done / total * 100) + "%";
+    count.textContent = done + " / " + total;
+  }
+
+  label.textContent = "✅ Mapa con nombres listo para usarse sin internet";
+  count.textContent = total + " sectores guardados";
+  bar.style.width = "100%";
+  btnPC.disabled = false;
+  btnPC.innerHTML = "<span>✅</span>Mapa offline listo";
+  setTimeout(() => { wrap.classList.remove("visible"); }, 5000);
+}
+
+// ── Service Worker ───────────────────────────────────────────
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("/view/sw.js",{scope:"/view/"})
+    .then(r=>console.log("[SW]",r.scope)).catch(e=>console.warn("[SW]",e));
+}
+
+// ── Init ─────────────────────────────────────────────────────
+cargarPuntos();
+actualizarUI();
+
+// El visualizador arranca en la lista de puntos (única pantalla permitida)
+if (SOLO_LECTURA) cambiarPantalla("puntos");
+</script>
+</body>
+</html>
+

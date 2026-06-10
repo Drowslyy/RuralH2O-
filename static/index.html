@@ -377,7 +377,7 @@ document.getElementById("btn-logout").addEventListener("click", () => {
 });
 
 // ── Config ────────────────────────────────────────────────
-const API_BASE        = "http://localhost:8000";
+const API_BASE = window.location.origin;
 const REFRESH_SEG     = 300;  // auto-refresh cada 5 min
 const AYSEN_CENTER    = [-45.57, -72.07];
 const AYSEN_BOUNDS    = L.latLngBounds(L.latLng(-49.8, -76.5), L.latLng(-43.3, -70.5));
@@ -464,14 +464,20 @@ ctrlHeat.onAdd = () => {
 ctrlHeat.addTo(mapa);
 
 // ── Marcadores ────────────────────────────────────────────
-function crearIcono(color) {
+function crearIcono(color, seleccionado = false) {
   const hex = COLOR_MAP[color]?.hex || "#9ca3af";
+  const size = seleccionado ? 30 : 22;
+  const anchor = size / 2;
+  const ring = seleccionado
+    ? `0 0 0 5px ${hex}88, 0 0 0 8px rgba(56,189,248,.55),`
+    : `0 0 0 3px ${hex}55,`;
+  const borde = seleccionado ? "4px solid #fff" : "3px solid rgba(255,255,255,.55)";
   return L.divIcon({
     className: "",
-    iconSize: [22, 22], iconAnchor: [11, 11],
-    html: `<div style="width:22px;height:22px;border-radius:50%;background:${hex};
-             border:3px solid rgba(255,255,255,.55);
-             box-shadow:0 0 0 3px ${hex}55,0 2px 6px rgba(0,0,0,.5)"></div>`,
+    iconSize: [size, size], iconAnchor: [anchor, anchor],
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${hex};
+             border:${borde};
+             box-shadow:${ring}0 2px 6px rgba(0,0,0,.5)"></div>`,
   });
 }
 
@@ -531,7 +537,12 @@ function renderizarMarcadores() {
   visibles.forEach(p => {
     const m = L.marker([p.lat, p.lng], { icon: crearIcono(p.color) });
     m.addTo(mapa);
-    m.on("click", () => { mapa.stopPropagation; mostrarDetalle(p); });
+    m.on("click", (ev) => {
+      // Evita que el clic en el marcador se propague al mapa
+      // (lo cual cerraría el panel de detalle recién abierto)
+      L.DomEvent.stopPropagation(ev);
+      seleccionarPunto(p);
+    });
     marcadores[p.id] = m;
     if (p.medicion?.alertas?.length) tieneAlertas = true;
   });
@@ -562,6 +573,29 @@ function toggleHeatmap(btn) {
     btn.classList.add("activo");
     mostrarToast("🌡 Mapa de calor activado — haz clic de nuevo para desactivar");
   }
+}
+
+// ── Selección de punto ────────────────────────────────────
+let puntoSeleccionadoId = null;
+
+function seleccionarPunto(p) {
+  puntoSeleccionadoId = p.id;
+
+  // Restaurar tamaño/estilo de todos los marcadores y resaltar el elegido
+  Object.entries(marcadores).forEach(([id, m]) => {
+    const punto = datosPuntos.find(x => String(x.id) === String(id));
+    if (!punto) return;
+    m.setIcon(crearIcono(punto.color, String(id) === String(p.id)));
+  });
+
+  // Centrar el mapa exactamente en las coordenadas del punto
+  if (modoHeat) {
+    mapa.setView([p.lat, p.lng], Math.max(mapa.getZoom(), 12), { animate: true });
+  } else {
+    mapa.panTo([p.lat, p.lng], { animate: true });
+  }
+
+  mostrarDetalle(p);
 }
 
 // ── Panel de detalle ──────────────────────────────────────
@@ -648,7 +682,23 @@ async function mostrarDetalle(p) {
     </div>`;
   }
 
+  // Botón de descarga del PDF individual del punto
+  html += `<div class="d-seccion" style="background:transparent;padding:4px 0">
+    <button id="btn-pdf-punto" class="btn-accion" style="width:100%">
+      📄 Descargar PDF de este punto
+    </button>
+  </div>`;
+
   document.getElementById("contenido-detalle").innerHTML = html;
+
+  // Conectar botón de PDF individual del punto
+  const btnPdf = document.getElementById("btn-pdf-punto");
+  if (btnPdf) {
+    btnPdf.addEventListener("click", () => {
+      window.open(`${API_BASE}/puntos/${p.id}/reporte.pdf`, "_blank");
+      mostrarToast(`📄 Generando PDF de «${p.nombre}»…`);
+    });
+  }
 
   // Cargar historial async si tiene mediciones
   if (m) {
@@ -850,16 +900,21 @@ document.getElementById("btn-reset").addEventListener("click", () => {
 });
 document.getElementById("btn-exportar").addEventListener("click", exportarCSV);
 document.getElementById("btn-exportar-pdf").addEventListener("click", exportarPDFFiltrado);
-document.getElementById("btn-cerrar-detalle").addEventListener("click", () => {
+function deseleccionarPunto() {
   document.getElementById("panel-detalle").classList.remove("abierto");
-});
-mapa.on("click", () => {
-  document.getElementById("panel-detalle").classList.remove("abierto");
-});
+  if (puntoSeleccionadoId !== null) {
+    const m = marcadores[puntoSeleccionadoId];
+    const punto = datosPuntos.find(x => String(x.id) === String(puntoSeleccionadoId));
+    if (m && punto) m.setIcon(crearIcono(punto.color, false));
+    puntoSeleccionadoId = null;
+  }
+}
+
+document.getElementById("btn-cerrar-detalle").addEventListener("click", deseleccionarPunto);
+mapa.on("click", deseleccionarPunto);
 
 // ── Arranque ──────────────────────────────────────────────
 cargarPuntos();
 </script>
 </body>
 </html>
-

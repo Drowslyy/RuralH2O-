@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Semana 10: Iteración 4 - Exportación PDF y refactorización")
+app = FastAPI(title="Semana 11: Iteración 5 - PWA, modo offline y exportación PDF")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app.add_middleware(
@@ -74,8 +74,8 @@ def crear_punto(
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_current_user)
 ):
-    if current_user.rol != "admin":
-        raise HTTPException(status_code=403, detail="Permisos insuficientes para crear puntos")
+    if current_user.rol not in ("admin", "registrador"):
+        raise HTTPException(status_code=403, detail="Tu rol solo permite visualizar datos")
     nuevo = models.PuntoMonitoreo(**punto.model_dump())
     db.add(nuevo)
     db.commit()
@@ -491,3 +491,5 @@ def exportar_reporte_mapa_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=" + nombre_safe2}
     )
+
+
