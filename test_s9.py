@@ -65,7 +65,7 @@ def headers(token):
 
 
 def crear_admin():
-    registrar_usuario("admin@test.cl", "admin1234", "admin")
+    registrar_usuario("admin@test.cl", "admin1234", "registrador")
     return obtener_token("admin@test.cl", "admin1234")
 
 
@@ -121,9 +121,9 @@ class TestAutenticacion:
         assert r.status_code == 403
 
     def test_no_admin_no_puede_crear_punto(self):
-        """Un registrador recibe 403 al intentar crear un punto de monitoreo."""
-        registrar_usuario()
-        token = obtener_token()
+        """Un visualizador recibe 403 al intentar crear un punto de monitoreo."""
+        registrar_usuario("viz2@test.cl", "viz1234", "visualizador")
+        token = obtener_token("viz2@test.cl", "viz1234")
         r = client.post("/puntos/", json={
             "nombre": "Pozo X", "tipo_fuente": "pozo",
             "comunidad": "X", "latitud": -45.0, "longitud": -72.0

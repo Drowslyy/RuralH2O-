@@ -362,8 +362,8 @@
   lblRol.textContent = rol;
   lblRol.className = `rol-badge rol-${rol}`;
 
-  // Mostrar botón de mediciones solo a admin y registrador
-  if (rol === "admin" || rol === "registrador") {
+  // Mostrar botón de registro de mediciones solo al registrador (terreno)
+  if (rol === "registrador") {
     document.getElementById("btn-mediciones").style.display = "inline-flex";
   }
 })();

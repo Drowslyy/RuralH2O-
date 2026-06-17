@@ -62,7 +62,7 @@ def headers(token):
 
 
 def crear_admin():
-    registrar_usuario("admin@test.cl", "admin1234", "admin")
+    registrar_usuario("admin@test.cl", "admin1234", "registrador")
     return obtener_token("admin@test.cl", "admin1234")
 
 

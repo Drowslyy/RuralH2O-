@@ -26,8 +26,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-# Se crea el TOKEN JWT (JSON Web Token)
-# FIX: datetime.utcnow() está deprecado en Python 3.12+, se usa datetime.now(timezone.utc)
+# TOKEN JWT (JSON Web Token)
 def crear_token(data: dict) -> str:
     payload = data.copy()
     expira  = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_EXPIRE_MINUTES)
@@ -35,9 +34,9 @@ def crear_token(data: dict) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-# Revisa si el token JWT que envía el usuario es válido y no ha expirado
+# token JWT que envía el usuario es válido y no ha expirado
 def verificar_token(token: str) -> dict:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
-        return None
+        return None 

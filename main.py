@@ -6,6 +6,7 @@ from typing import List, Optional
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from datetime import datetime, timezone
 import io
+import time
 from fpdf import FPDF
 
 import models
@@ -18,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Semana 11: Iteración 5 - PWA, modo offline y exportación PDF")
+app = FastAPI(title="Semana 12: Iteración 6 - Optimización y estabilización")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app.add_middleware(
@@ -29,6 +30,22 @@ app.add_middleware(
 )
 
 app.mount("/view", StaticFiles(directory="static", html=True), name="static")
+
+
+# ==========================================================
+# Iteración 6: Caché en memoria para el endpoint del mapa
+# ==========================================================
+# El mapa se consulta con frecuencia y sus datos cambian poco.
+# Guardamos la respuesta unos segundos para no recalcularla en
+# cada petición. Cualquier escritura (punto o medición nueva)
+# invalida el caché para no servir datos obsoletos.
+_cache_mapa: dict = {}
+_CACHE_TTL = 30  # segundos
+
+
+def _invalidar_cache_mapa():
+    """Vacía el caché del mapa (se llama tras crear puntos o mediciones)."""
+    _cache_mapa.clear()
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -74,12 +91,13 @@ def crear_punto(
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_current_user)
 ):
-    if current_user.rol not in ("admin", "registrador"):
+    if current_user.rol != "registrador":
         raise HTTPException(status_code=403, detail="Tu rol solo permite visualizar datos")
     nuevo = models.PuntoMonitoreo(**punto.model_dump())
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
+    _invalidar_cache_mapa()
     return nuevo
 
 
@@ -95,24 +113,28 @@ def obtener_puntos_mapa(
     comunidad: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
-    puntos = (
-        db.query(models.PuntoMonitoreo)
-        .options(
-            subqueryload(models.PuntoMonitoreo.mediciones)
-            .subqueryload(models.Medicion.alertas)
-        )
-        .all()
+    # ── Caché: clave según los filtros activos ───────────────
+    clave = f"{color}|{tipo_fuente}|{comunidad}"
+    ahora_ts = time.time()
+    entrada = _cache_mapa.get(clave)
+    if entrada and (ahora_ts - entrada["ts"] < _CACHE_TTL):
+        return entrada["data"]
+
+    # ── Filtros aplicados en SQL (no en Python) ──────────────
+    query = db.query(models.PuntoMonitoreo).options(
+        subqueryload(models.PuntoMonitoreo.mediciones)
+        .subqueryload(models.Medicion.alertas)
     )
+    if tipo_fuente:
+        query = query.filter(func.lower(models.PuntoMonitoreo.tipo_fuente) == tipo_fuente.lower())
+    if comunidad:
+        query = query.filter(models.PuntoMonitoreo.comunidad.ilike(f"%{comunidad}%"))
+    puntos = query.all()
 
     resultado = []
     ahora = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for p in puntos:
-        if tipo_fuente and p.tipo_fuente.lower() != tipo_fuente.lower():
-            continue
-        if comunidad and comunidad.lower() not in p.comunidad.lower():
-            continue
-
         ultima = max(p.mediciones, key=lambda m: m.fecha, default=None)
         color_punto = "gray"
         detalle_medicion = None
@@ -151,6 +173,8 @@ def obtener_puntos_mapa(
             "medicion": detalle_medicion,
         })
 
+    # Guardar en caché antes de responder
+    _cache_mapa[clave] = {"ts": ahora_ts, "data": resultado}
     return resultado
 
 
@@ -158,6 +182,45 @@ def obtener_puntos_mapa(
 def listar_comunidades(db: Session = Depends(get_db)):
     rows = db.query(models.PuntoMonitoreo.comunidad).distinct().all()
     return sorted(set(r[0] for r in rows))
+
+
+@app.get("/mapa/resumen")
+def resumen_mapa(db: Session = Depends(get_db)):
+    """Resumen para el tablero de jefatura: conteo de puntos por estado NCh 409
+    y cuántos llevan mucho tiempo sin una medición reciente."""
+    puntos = (
+        db.query(models.PuntoMonitoreo)
+        .options(
+            subqueryload(models.PuntoMonitoreo.mediciones)
+            .subqueryload(models.Medicion.alertas)
+        )
+        .all()
+    )
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    conteo = {"green": 0, "yellow": 0, "red": 0, "gray": 0}
+    sin_medicion_reciente = 0  # > 30 días sin medir
+
+    for p in puntos:
+        ultima = max(p.mediciones, key=lambda m: m.fecha, default=None)
+        if not ultima:
+            conteo["gray"] += 1
+            sin_medicion_reciente += 1
+            continue
+        tiene_advertencia = any(a.nivel == "advertencia" for a in ultima.alertas)
+        color = ("yellow" if tiene_advertencia else "green") if ultima.apta else "red"
+        conteo[color] += 1
+        if (ahora - ultima.fecha).days > 30:
+            sin_medicion_reciente += 1
+
+    return {
+        "total": len(puntos),
+        "aptos": conteo["green"],
+        "advertencia": conteo["yellow"],
+        "no_aptos": conteo["red"],
+        "sin_datos": conteo["gray"],
+        "sin_medicion_reciente": sin_medicion_reciente,
+    }
 
 
 @app.get("/mapa/historial/{punto_id}")
@@ -189,7 +252,7 @@ def crear_medicion(
     db: Session = Depends(get_db),
     current_user: models.Usuario = Depends(get_current_user)
 ):
-    if current_user.rol == "visualizador":
+    if current_user.rol != "registrador":
         raise HTTPException(status_code=403, detail="Tu rol solo permite visualizar datos")
     punto = db.query(models.PuntoMonitoreo).filter(models.PuntoMonitoreo.id == medicion.punto_id).first()
     if not punto:
@@ -215,6 +278,7 @@ def crear_medicion(
                 mensaje=a["mensaje"]
             ))
         db.commit()
+    _invalidar_cache_mapa()
     return nueva
 
 
@@ -491,5 +555,3 @@ def exportar_reporte_mapa_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=" + nombre_safe2}
     )
-
-

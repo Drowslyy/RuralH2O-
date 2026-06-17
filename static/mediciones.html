@@ -298,7 +298,7 @@
     </div>
   </div>
 
-  <!-- ── TAB 1: Nuevo Punto (solo admin) ───────────── -->
+  <!-- ── TAB 1: Nuevo Punto (solo registrador) ───────────── -->
   <div class="tab-panel" id="tab-1">
     <div class="card">
       <div class="card-titulo">＋ Crear punto de monitoreo</div>
@@ -372,8 +372,8 @@ if (ROL === "visualizador") {
   window.location.replace("index.html");
 }
 
-// Mostrar pestaña "Nuevo punto" solo a administradores
-if (ROL === "admin") {
+// Mostrar pestaña "Nuevo punto": el registrador (terreno) es quien crea puntos
+if (ROL === "registrador") {
   document.querySelectorAll(".solo-admin").forEach(el => el.classList.add("visible"));
 }
 
@@ -772,3 +772,5 @@ actualizarUI();
 </script>
 </body>
 </html>
+
+

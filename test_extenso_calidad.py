@@ -9,17 +9,17 @@ casos_prueba = [
     (8.5, 2.0, 5.0, True, 0),   # Límite superior de pH, cloro y turbidez
     
     # 2. FALLOS POR PH
-    (6.4, 1.0, 1.0, False, 1),  # pH justo abajo (advertencia)
+    (6.4, 1.0, 1.0, True, 1),   # pH zona límite (advertencia) -> APTA con alerta
     (5.9, 1.0, 1.0, False, 1),  # pH muy abajo (crítico)
-    (8.6, 1.0, 1.0, False, 1),  # pH justo arriba (advertencia)
+    (8.6, 1.0, 1.0, True, 1),   # pH zona límite (advertencia) -> APTA con alerta
     (9.1, 1.0, 1.0, False, 1),  # pH muy arriba (crítico)
     
     # 3. FALLOS POR CLORO
-    (7.0, 2.1, 1.0, False, 1),  # Cloro excedido (2.1)
+    (7.0, 2.1, 1.0, True, 1),   # Cloro zona límite (2.0-3.0) -> APTA con alerta
     (7.0, 5.0, 1.0, False, 1),  # Cloro al máximo permitido por el schema
     
     # 4. FALLOS POR TURBIDEZ
-    (7.0, 1.0, 5.1, False, 1),  # Turbidez apenas excedida
+    (7.0, 1.0, 5.1, True, 1),   # Turbidez zona límite (5-10) -> APTA con alerta
     (7.0, 1.0, 100.0, False, 1), # Turbidez extrema
     
     # 5. FALLOS MÚLTIPLES (Combo mortal)
