@@ -62,3 +62,16 @@ class Alerta(Base):
     fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     medicion = relationship("Medicion", back_populates="alertas")
+
+
+# --- NUEVA TABLA (Iteración 7 - RF-08): Avisos comunitarios ---
+class Aviso(Base):
+    __tablename__ = "avisos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    titulo = Column(String(120), nullable=False)
+    mensaje = Column(String(500), nullable=False)
+    comunidad = Column(String(100), nullable=True)   # opcional: aviso dirigido a una comunidad
+    autor = Column(String(100), nullable=False)       # email del visualizador que lo publica
+    activo = Column(Boolean, default=True)            # archivar en vez de borrar (registro inmutable)
+    fecha = Column(DateTime, default=lambda: datetime.now(timezone.utc))

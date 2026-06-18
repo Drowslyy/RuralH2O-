@@ -14,12 +14,13 @@ import schemas
 from database import engine, get_db
 from auth import hash_password, verify_password, crear_token, verificar_token
 from validaciones import evaluar_nch409
+from notificaciones import enviar_aviso_por_correo
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Semana 12: Iteración 6 - Optimización y estabilización")
+app = FastAPI(title="Semana 13: Iteración 7 - RF-08 Avisos y consolidación")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app.add_middleware(
@@ -311,6 +312,81 @@ def marcar_alerta_leida(
 
 
 # ==========================================================
+# RF-08: MÓDULO DE AVISOS COMUNITARIOS (Iteración 7)
+# ==========================================================
+# La jefatura (visualizador) publica avisos cortos para terreno.
+# El registrador los consulta desde su app. Los avisos no se borran:
+# se archivan (activo=False), respetando el registro inmutable.
+
+@app.post("/avisos/", response_model=schemas.AvisoOut)
+def crear_aviso(
+    aviso: schemas.AvisoCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    # Solo la jefatura (visualizador) publica avisos.
+    if current_user.rol != "visualizador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo la jefatura (visualizador) puede publicar avisos"
+        )
+    nuevo = models.Aviso(
+        titulo=aviso.titulo,
+        mensaje=aviso.mensaje,
+        comunidad=aviso.comunidad,
+        autor=current_user.email,
+        activo=True,
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+
+    # Notificación por correo a los registradores (modo preparado/seguro).
+    registradores = db.query(models.Usuario).filter(
+        models.Usuario.rol == "registrador"
+    ).all()
+    destinatarios = [u.email for u in registradores]
+    if destinatarios:
+        enviar_aviso_por_correo(destinatarios, aviso.titulo, aviso.mensaje)
+
+    return nuevo
+
+
+@app.get("/avisos/", response_model=List[schemas.AvisoOut])
+def listar_avisos(
+    incluir_archivados: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    """Lista los avisos activos (o todos si incluir_archivados=True).
+    Accesible para cualquier usuario autenticado del sistema."""
+    query = db.query(models.Aviso)
+    if not incluir_archivados:
+        query = query.filter(models.Aviso.activo == True)
+    return query.order_by(models.Aviso.fecha.desc()).all()
+
+
+@app.patch("/avisos/{aviso_id}/archivar", response_model=schemas.AvisoOut)
+def archivar_aviso(
+    aviso_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    """Archiva un aviso (no lo borra). Solo la jefatura puede archivar."""
+    if current_user.rol != "visualizador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo la jefatura (visualizador) puede archivar avisos"
+        )
+    aviso = db.query(models.Aviso).filter(models.Aviso.id == aviso_id).first()
+    if not aviso:
+        raise HTTPException(status_code=404, detail="Aviso no encontrado")
+    aviso.activo = False
+    db.commit()
+    db.refresh(aviso)
+    return aviso
+
+
+# ==========================================================
 # RF-04: EXPORTACION PDF (Iteracion 4)
 # ==========================================================
 @app.get("/puntos/{punto_id}/reporte.pdf")
@@ -403,6 +479,65 @@ def exportar_reporte_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={nombre_archivo}"}
     )
+
+
+# ==========================================================
+# RF-08: AVISOS COMUNITARIOS (Iteracion 7)
+# ==========================================================
+# La jefatura (visualizador) publica avisos cortos visibles para
+# todos los usuarios. Solo el visualizador puede crear o eliminar.
+@app.post("/avisos/", response_model=schemas.AvisoOut)
+def crear_aviso(
+    aviso: schemas.AvisoCreate,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    if current_user.rol != "visualizador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo la jefatura (visualizador) puede publicar avisos"
+        )
+    nuevo = models.Aviso(
+        titulo=aviso.titulo,
+        mensaje=aviso.mensaje,
+        comunidad=aviso.comunidad,
+        autor=current_user.email,
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return nuevo
+
+
+@app.get("/avisos/", response_model=List[schemas.AvisoOut])
+def listar_avisos(
+    comunidad: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Lista los avisos (más recientes primero). Visible para todos los usuarios."""
+    query = db.query(models.Aviso)
+    if comunidad:
+        query = query.filter(models.Aviso.comunidad.ilike(f"%{comunidad}%"))
+    return query.order_by(models.Aviso.fecha.desc()).all()
+
+
+@app.delete("/avisos/{aviso_id}")
+def eliminar_aviso(
+    aviso_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_user)
+):
+    if current_user.rol != "visualizador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo la jefatura (visualizador) puede eliminar avisos"
+        )
+    aviso = db.query(models.Aviso).filter(models.Aviso.id == aviso_id).first()
+    if not aviso:
+        raise HTTPException(status_code=404, detail="Aviso no encontrado")
+    db.delete(aviso)
+    db.commit()
+    return {"detail": "Aviso eliminado", "id": aviso_id}
 
 
 # ==========================================================

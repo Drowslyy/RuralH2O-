@@ -207,27 +207,6 @@
       height:260px; border-radius:10px; overflow:hidden;
       border:1px solid #2d4f6e; margin-bottom:10px;
     }
-    #mapa-vista {
-      height:240px; border-radius:10px; overflow:hidden;
-      border:1px solid #2d4f6e;
-    }
-    #resumen-tablero {
-      display:grid; grid-template-columns:repeat(2,1fr);
-      gap:8px; margin-bottom:14px;
-    }
-    #resumen-tablero .stat {
-      background:var(--input); border:1px solid #2d4f6e;
-      border-radius:10px; padding:10px 12px;
-    }
-    #resumen-tablero .stat .num { font-size:1.5rem; font-weight:800; line-height:1; }
-    #resumen-tablero .stat .lbl { font-size:.7rem; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.4px; }
-    #resumen-tablero .stat.full { grid-column:1 / -1; }
-    .btn-pdf-item {
-      background:#0ea5e9; border:none; color:#fff; cursor:pointer;
-      border-radius:7px; padding:5px 10px; font-size:.72rem; font-weight:700;
-      margin-left:6px; white-space:nowrap;
-    }
-    .btn-pdf-item:hover { background:#38bdf8; }
     #coords-display {
       background:var(--input); border-radius:8px; padding:10px 12px;
       font-size:.78rem; color:var(--muted); margin-bottom:12px;
@@ -359,16 +338,6 @@
     <div class="offline-note" id="nota-offline-pts">
       📵 Sin conexión — mostrando última lista guardada + puntos pendientes locales
     </div>
-
-    <!-- Tablero de resumen (útil sobre todo para jefatura/visualizador) -->
-    <div id="resumen-tablero"></div>
-
-    <!-- Mapa de estado de puntos (igual lógica de colores que la web) -->
-    <div class="card" id="card-mapa-vista">
-      <div class="card-titulo">🗺 Mapa de puntos</div>
-      <div id="mapa-vista"></div>
-    </div>
-
     <div class="card-titulo" style="margin-bottom:10px">📍 Puntos de monitoreo</div>
     <div id="lista-puntos"><div class="cargando">Cargando…</div></div>
   </div>
@@ -430,6 +399,35 @@
     </div>
   </div>
 
+  <!-- AVISOS (RF-08) -->
+  <div id="pant-avisos" class="pantalla">
+    <!-- Formulario de publicación: SOLO jefatura (visualizador) -->
+    <div class="card" id="card-publicar-aviso" style="display:none">
+      <div class="card-titulo">📢 Publicar aviso a terreno</div>
+      <form id="form-aviso" autocomplete="off">
+        <div class="campo">
+          <label for="av-titulo">Título *</label>
+          <input type="text" id="av-titulo" placeholder="Ej: Corte de suministro" maxlength="120" required />
+        </div>
+        <div class="campo">
+          <label for="av-mensaje">Mensaje *</label>
+          <input type="text" id="av-mensaje" placeholder="Ej: Corte programado en Villa Mañihuales el 20/06" maxlength="500" required />
+        </div>
+        <div class="campo">
+          <label for="av-comunidad">Comunidad (opcional)</label>
+          <input type="text" id="av-comunidad" placeholder="Ej: Villa Mañihuales" />
+        </div>
+        <button type="submit" id="btn-publicar" class="btn btn-blue">📢 Publicar aviso</button>
+        <div class="mensaje ok"    id="av-msg-ok"></div>
+        <div class="mensaje error" id="av-msg-error"></div>
+      </form>
+    </div>
+
+    <!-- Lista de avisos: visible para todos -->
+    <div class="card-titulo" style="margin-bottom:10px">📢 Avisos de la jefatura</div>
+    <div id="lista-avisos"><div class="cargando">Cargando…</div></div>
+  </div>
+
 </div>
 
 <div id="nav-bottom">
@@ -442,6 +440,9 @@
   <button class="nav-btn" id="nav-nuevo" onclick="cambiarPantalla('nuevo')">
     <span class="icon">➕</span>Nuevo
   </button>
+  <button class="nav-btn" id="nav-avisos" onclick="cambiarPantalla('avisos')">
+    <span class="icon">📢</span>Avisos
+  </button>
 </div>
 
 <script>
@@ -453,32 +454,15 @@ if (!TOKEN) { window.location.replace("login.html"); }
 if (TOKEN)  localStorage.setItem("ruralh2o_token", TOKEN);
 const TOKEN_USE = TOKEN || "";
 
-// ── Control de rol ───────────────────────────────────────────
-// El visualizador NO puede registrar mediciones ni crear puntos:
-// solo tiene acceso de lectura a la lista de puntos.
-const USER_ROL = sessionStorage.getItem("user_rol") || "";
-const SOLO_LECTURA = USER_ROL === "visualizador";
-
-if (SOLO_LECTURA) {
-  // Ocultar las pestañas de acción (Registrar y Nuevo punto)
-  ["nav-registrar", "nav-nuevo"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = "none";
-  });
-}
-
 // ── Navegación ───────────────────────────────────────────────
 function cambiarPantalla(n) {
-  // Bloquear pantallas de escritura para el rol visualizador
-  if (SOLO_LECTURA && (n === "registrar" || n === "nuevo")) {
-    n = "puntos";
-  }
   document.querySelectorAll(".pantalla").forEach(p=>p.classList.remove("activa"));
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("activo"));
   document.getElementById("pant-"+n).classList.add("activa");
   document.getElementById("nav-"+n).classList.add("activo");
   if (n==="puntos") cargarListaPuntos();
   if (n==="nuevo")  iniciarMapaNuevo();
+  if (n==="avisos") cargarAvisos();
 }
 function cerrarSesion() {
   sessionStorage.clear(); localStorage.removeItem("ruralh2o_token");
@@ -652,10 +636,6 @@ async function cargarListaPuntos(){
     notaOffline.classList.add("visible");
   }
 
-  // Resumen + mapa (se alimentan de los puntos del servidor)
-  cargarResumen();
-  dibujarMapaVista(puntosServidor);
-
   const puntosPendientes=await idbGetAll(ST_PTS);
 
   const htmlServidor=puntosServidor.map(p=>{
@@ -671,7 +651,6 @@ async function cargarListaPuntos(){
         "<div class='punto-valores'>"+vals+"</div>"+
       "</div>"+
       "<span class='punto-estado "+ECLS[p.color]+"'>"+LABEL[p.color]+"</span>"+
-      "<button class='btn-pdf-item' onclick='descargarPdfPunto("+p.id+")'>📄 PDF</button>"+
       "</div>";
   }).join("");
 
@@ -694,66 +673,90 @@ async function cargarListaPuntos(){
   }
 }
 
-// Descarga el PDF individual de un punto (disponible para todos los roles)
-function descargarPdfPunto(id){
-  window.open(API_BASE+"/puntos/"+id+"/reporte.pdf","_blank");
-}
+// ── AVISOS (RF-08) ───────────────────────────────────────────
+// La jefatura (visualizador) publica; todos los roles pueden leer.
+const ES_JEFATURA = USER_ROL === "visualizador";
 
-// Tablero de resumen (pensado para jefatura/visualizador)
-async function cargarResumen(){
-  const cont=document.getElementById("resumen-tablero");
-  if(!cont) return;
+async function cargarAvisos(){
+  const lista=document.getElementById("lista-avisos");
+  const cardPub=document.getElementById("card-publicar-aviso");
+  // Mostrar el formulario de publicación solo a la jefatura
+  if(cardPub) cardPub.style.display = ES_JEFATURA ? "block" : "none";
+
+  lista.innerHTML='<div class="cargando">Cargando…</div>';
   try{
-    const res=await fetch(API_BASE+"/mapa/resumen");
-    const r=await res.json();
-    cont.innerHTML=
-      "<div class='stat'><div class='num' style='color:#4ade80'>"+r.aptos+"</div><div class='lbl'>Aptos</div></div>"+
-      "<div class='stat'><div class='num' style='color:#facc15'>"+r.advertencia+"</div><div class='lbl'>Advertencia</div></div>"+
-      "<div class='stat'><div class='num' style='color:#f87171'>"+r.no_aptos+"</div><div class='lbl'>No aptos</div></div>"+
-      "<div class='stat'><div class='num' style='color:#94a3b8'>"+r.sin_datos+"</div><div class='lbl'>Sin datos</div></div>"+
-      "<div class='stat full'><div class='num' style='color:#fb923c'>"+r.sin_medicion_reciente+"</div><div class='lbl'>Sin medición hace +30 días</div></div>";
+    const res=await fetch(API_BASE+"/avisos/");
+    const avisos=await res.json();
+    if(!avisos.length){
+      lista.innerHTML='<div class="cargando">No hay avisos publicados</div>';
+      return;
+    }
+    lista.innerHTML=avisos.map(a=>{
+      const fecha=new Date(a.fecha).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric"});
+      const com=a.comunidad?("📍 "+a.comunidad+" · "):"";
+      const btnArchivar=ES_JEFATURA
+        ? "<button class='btn-pdf-item' style='background:#7f1d1d' onclick='archivarAviso("+a.id+")'>🗄 Archivar</button>"
+        : "";
+      return "<div class='card' style='margin-bottom:10px'>"+
+        "<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px'>"+
+          "<div style='font-size:.92rem;font-weight:700;color:var(--blue)'>📢 "+a.titulo+"</div>"+
+          btnArchivar+
+        "</div>"+
+        "<div style='font-size:.84rem;margin-top:6px;line-height:1.4'>"+a.mensaje+"</div>"+
+        "<div style='font-size:.68rem;color:var(--muted);margin-top:8px'>"+com+fecha+"</div>"+
+      "</div>";
+    }).join("");
   }catch(_){
-    cont.innerHTML="";
+    lista.innerHTML='<div class="cargando">📵 Sin conexión — no se pudieron cargar los avisos</div>';
   }
 }
 
-// Mapa de estado de puntos (misma codificación de color NCh 409 que la web)
-let mapaVista=null, mapaVistaMarcadores=[];
-const COLOR_HEX={green:"#22c55e",yellow:"#eab308",red:"#ef4444",gray:"#9ca3af"};
-function dibujarMapaVista(puntos){
-  const cont=document.getElementById("mapa-vista");
-  if(!cont || typeof L==="undefined") return;
+async function archivarAviso(id){
+  if(!confirm("¿Archivar este aviso? Dejará de mostrarse a terreno.")) return;
+  try{
+    const res=await fetch(API_BASE+"/avisos/"+id+"/archivar",{
+      method:"PATCH",
+      headers:{"Authorization":"Bearer "+TOKEN_USE},
+    });
+    if(res.ok) cargarAvisos();
+  }catch(_){}
+}
 
-  if(!mapaVista){
-    mapaVista=L.map("mapa-vista").setView([-45.5712,-72.0685],8);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {attribution:"© OpenStreetMap"}).addTo(mapaVista);
-  }
-  // Limpiar marcadores previos
-  mapaVistaMarcadores.forEach(m=>mapaVista.removeLayer(m));
-  mapaVistaMarcadores=[];
+// Publicar aviso (solo jefatura)
+const formAviso=document.getElementById("form-aviso");
+if(formAviso){
+  formAviso.addEventListener("submit", async e=>{
+    e.preventDefault();
+    const btn=document.getElementById("btn-publicar");
+    const msgOk=document.getElementById("av-msg-ok");
+    const msgErr=document.getElementById("av-msg-error");
+    msgOk.style.display="none"; msgErr.style.display="none";
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Publicando…';
 
-  const LABEL={green:"✅ Apta",yellow:"⚠️ Advertencia",red:"❌ No apta",gray:"⬜ Sin mediciones"};
-  const conCoords=[];
-  puntos.forEach(p=>{
-    if(p.lat==null||p.lng==null) return;
-    const m=L.circleMarker([p.lat,p.lng],{
-      radius:9, fillColor:COLOR_HEX[p.color]||"#9ca3af",
-      color:"#fff", weight:2, fillOpacity:.9
-    }).addTo(mapaVista);
-    m.bindPopup(
-      "<b>"+p.nombre+"</b><br>"+p.comunidad+" · "+p.tipo_fuente+"<br>"+
-      (LABEL[p.color]||"")+"<br>"+
-      "<a href='"+API_BASE+"/puntos/"+p.id+"/reporte.pdf' target='_blank'>📄 Descargar PDF</a>"
-    );
-    mapaVistaMarcadores.push(m);
-    conCoords.push([p.lat,p.lng]);
+    const datos={
+      titulo:document.getElementById("av-titulo").value.trim(),
+      mensaje:document.getElementById("av-mensaje").value.trim(),
+      comunidad:document.getElementById("av-comunidad").value.trim()||null,
+    };
+    try{
+      const res=await fetch(API_BASE+"/avisos/",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+TOKEN_USE},
+        body:JSON.stringify(datos),
+      });
+      if(!res.ok){ const d=await res.json().catch(()=>({})); throw new Error(d.detail||"Error "+res.status); }
+      msgOk.textContent="✔ Aviso publicado. Se notificó a los registradores.";
+      msgOk.style.display="block";
+      formAviso.reset();
+      cargarAvisos();
+      setTimeout(()=>{ msgOk.style.display="none"; },4000);
+    }catch(err){
+      msgErr.textContent=err.message; msgErr.style.display="block";
+    }finally{
+      btn.disabled=false; btn.textContent="📢 Publicar aviso";
+    }
   });
-  if(conCoords.length) mapaVista.fitBounds(conCoords,{padding:[30,30],maxZoom:12});
-  // Forzar recálculo de tamaño (el mapa estaba oculto al inicializar)
-  setTimeout(()=>mapaVista.invalidateSize(),100);
 }
-
 
 // ── SINCRONIZACIÓN COMPLETA ──────────────────────────────────
 // Orden: 1) puntos pendientes → 2) actualizar temp IDs en mediciones → 3) mediciones
@@ -1128,9 +1131,6 @@ if("serviceWorker" in navigator){
 // ── Init ─────────────────────────────────────────────────────
 cargarPuntos();
 actualizarUI();
-
-// El visualizador arranca en la lista de puntos (única pantalla permitida)
-if (SOLO_LECTURA) cambiarPantalla("puntos");
 </script>
 </body>
 </html>

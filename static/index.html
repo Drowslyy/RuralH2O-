@@ -272,6 +272,7 @@
     <span id="badge-alertas">⚠ Alertas activas</span>
     <span id="timer-refresh" title="Haz clic para actualizar ahora">↻ --:--</span>
     <a id="btn-mediciones" href="mediciones.html" title="Registrar nueva medición">＋ Medición</a>
+    <button id="btn-avisos" title="Avisos a terreno" style="font-size:.75rem;color:#facc15;cursor:pointer;padding:4px 10px;border-radius:6px;border:1px solid #ca8a04;background:#0d1b2a;">📢 Avisos</button>
     <div id="info-usuario">
       <span id="lbl-email"></span>
       <span id="lbl-rol" class="rol-badge"></span>
@@ -343,6 +344,35 @@
 
 <!-- Toast -->
 <div id="toast"></div>
+
+<!-- ── Modal de Avisos (RF-08) ── -->
+<div id="modal-avisos" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">
+  <div style="background:#0d1b2a;border:1px solid #1e3a5f;border-radius:12px;width:100%;max-width:520px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #1e3a5f;">
+      <span style="font-size:.9rem;font-weight:700;color:#facc15;">📢 Avisos a terreno</span>
+      <button id="cerrar-modal-avisos" style="background:none;border:none;color:#64748b;font-size:1.2rem;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:16px 18px;">
+      <!-- Formulario: solo visualizador -->
+      <div id="av-form-wrap" style="display:none;margin-bottom:18px;">
+        <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:10px;">Publicar nuevo aviso</div>
+        <input type="text" id="av-titulo" placeholder="Título (ej: Corte de suministro)" maxlength="120"
+          style="width:100%;background:#1a2e45;border:1px solid #2d4f6e;color:#e2e8f0;padding:9px 11px;border-radius:7px;font-size:.85rem;margin-bottom:8px;outline:none;" />
+        <input type="text" id="av-mensaje" placeholder="Mensaje del aviso" maxlength="500"
+          style="width:100%;background:#1a2e45;border:1px solid #2d4f6e;color:#e2e8f0;padding:9px 11px;border-radius:7px;font-size:.85rem;margin-bottom:8px;outline:none;" />
+        <input type="text" id="av-comunidad" placeholder="Comunidad (opcional)"
+          style="width:100%;background:#1a2e45;border:1px solid #2d4f6e;color:#e2e8f0;padding:9px 11px;border-radius:7px;font-size:.85rem;margin-bottom:10px;outline:none;" />
+        <button id="av-publicar" style="width:100%;padding:10px;border-radius:8px;border:none;background:#0ea5e9;color:#fff;font-size:.85rem;font-weight:700;cursor:pointer;">📢 Publicar aviso</button>
+        <div id="av-msg" style="font-size:.78rem;margin-top:8px;display:none;"></div>
+      </div>
+      <!-- Lista de avisos -->
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#64748b;margin-bottom:10px;">Avisos publicados</div>
+      <div id="av-lista"><p style="color:#475569;font-size:.82rem;text-align:center;padding:14px 0;">Cargando…</p></div>
+    </div>
+  </div>
+</div>
+
+
 
 <!-- ════════════════════════════════════════════════════════ -->
 <script>
@@ -913,8 +943,89 @@ function deseleccionarPunto() {
 document.getElementById("btn-cerrar-detalle").addEventListener("click", deseleccionarPunto);
 mapa.on("click", deseleccionarPunto);
 
+// ── Avisos (RF-08) ────────────────────────────────────────
+const ES_JEFATURA_IDX = (sessionStorage.getItem("user_rol") || "") === "visualizador";
+
+document.getElementById("btn-avisos").addEventListener("click", () => {
+  document.getElementById("modal-avisos").style.display = "flex";
+  document.getElementById("av-form-wrap").style.display = ES_JEFATURA_IDX ? "block" : "none";
+  cargarAvisosIdx();
+});
+document.getElementById("cerrar-modal-avisos").addEventListener("click", () => {
+  document.getElementById("modal-avisos").style.display = "none";
+});
+
+async function cargarAvisosIdx() {
+  const lista = document.getElementById("av-lista");
+  lista.innerHTML = '<p style="color:#475569;font-size:.82rem;text-align:center;padding:14px 0;">Cargando…</p>';
+  try {
+    const res = await fetch(`${API_BASE}/avisos/`);
+    const avisos = await res.json();
+    if (!avisos.length) {
+      lista.innerHTML = '<p style="color:#475569;font-size:.82rem;text-align:center;padding:14px 0;">No hay avisos publicados</p>';
+      return;
+    }
+    lista.innerHTML = avisos.map(a => {
+      const fecha = new Date(a.fecha).toLocaleDateString("es-CL", {day:"2-digit",month:"2-digit",year:"numeric"});
+      const com = a.comunidad ? `📍 ${a.comunidad} · ` : "";
+      const btnArch = ES_JEFATURA_IDX
+        ? `<button onclick="archivarAvisoIdx(${a.id})" style="background:#7f1d1d;border:none;color:#fca5a5;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:.7rem;font-weight:700;">🗄 Archivar</button>`
+        : "";
+      return `<div style="background:#1a2e45;border-radius:8px;padding:11px 13px;margin-bottom:9px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <span style="font-size:.86rem;font-weight:700;color:#38bdf8;">📢 ${a.titulo}</span>${btnArch}
+        </div>
+        <div style="font-size:.82rem;margin-top:6px;line-height:1.4;">${a.mensaje}</div>
+        <div style="font-size:.68rem;color:#64748b;margin-top:7px;">${com}${fecha}</div>
+      </div>`;
+    }).join("");
+  } catch (_) {
+    lista.innerHTML = '<p style="color:#475569;font-size:.82rem;text-align:center;padding:14px 0;">No se pudieron cargar los avisos</p>';
+  }
+}
+
+async function archivarAvisoIdx(id) {
+  if (!confirm("¿Archivar este aviso? Dejará de mostrarse a terreno.")) return;
+  try {
+    const res = await fetch(`${API_BASE}/avisos/${id}/archivar`, {
+      method: "PATCH",
+      headers: { "Authorization": "Bearer " + sessionStorage.getItem("token") },
+    });
+    if (res.ok) cargarAvisosIdx();
+  } catch (_) {}
+}
+
+document.getElementById("av-publicar").addEventListener("click", async () => {
+  const msg = document.getElementById("av-msg");
+  const datos = {
+    titulo: document.getElementById("av-titulo").value.trim(),
+    mensaje: document.getElementById("av-mensaje").value.trim(),
+    comunidad: document.getElementById("av-comunidad").value.trim() || null,
+  };
+  msg.style.display = "none";
+  try {
+    const res = await fetch(`${API_BASE}/avisos/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + sessionStorage.getItem("token") },
+      body: JSON.stringify(datos),
+    });
+    if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail || "Error " + res.status); }
+    msg.textContent = "✔ Aviso publicado. Se notificó a los registradores.";
+    msg.style.color = "#4ade80"; msg.style.display = "block";
+    document.getElementById("av-titulo").value = "";
+    document.getElementById("av-mensaje").value = "";
+    document.getElementById("av-comunidad").value = "";
+    cargarAvisosIdx();
+    setTimeout(() => { msg.style.display = "none"; }, 4000);
+  } catch (err) {
+    msg.textContent = err.message; msg.style.color = "#f87171"; msg.style.display = "block";
+  }
+});
+
 // ── Arranque ──────────────────────────────────────────────
 cargarPuntos();
+
+
 </script>
 </body>
 </html>

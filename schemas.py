@@ -88,3 +88,21 @@ class AlertaOut(AlertaBase):
 
     model_config = ConfigDict(from_attributes=True)  # Iter. 4
 
+
+
+# ── Avisos comunitarios (Iteración 7 - RF-08) ─────────────
+class AvisoBase(BaseModel):
+    titulo    : str = Field(..., min_length=3, max_length=120)
+    mensaje   : str = Field(..., min_length=3, max_length=500)
+    comunidad : Optional[str] = None
+
+class AvisoCreate(AvisoBase):
+    pass
+
+class AvisoOut(AvisoBase):
+    id     : int
+    autor  : str
+    activo : bool
+    fecha  : datetime
+
+    model_config = ConfigDict(from_attributes=True)
