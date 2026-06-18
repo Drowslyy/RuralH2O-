@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import io
 import time
 from fpdf import FPDF
+from fastapi.responses import RedirectResponse
 
 import models
 import schemas
@@ -29,6 +30,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+def redirigir_al_login():
+    return RedirectResponse(url="/view/login.html")
 
 app.mount("/view", StaticFiles(directory="static", html=True), name="static")
 
