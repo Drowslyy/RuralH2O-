@@ -258,6 +258,26 @@
       color:var(--blue); margin-bottom:10px; display:none;
     }
     .offline-note.visible { display:block; }
+
+    /* MAPA EN PESTAÑA PUNTOS */
+    #mapa-vista {
+      height:240px; border-radius:10px; overflow:hidden;
+      border:1px solid #2d4f6e;
+    }
+    /* BOTÓN PDF POR PUNTO */
+    .btn-pdf-item {
+      background:#0ea5e9; border:none; color:#fff; cursor:pointer;
+      border-radius:7px; padding:5px 10px; font-size:.72rem; font-weight:700;
+      margin-left:6px; white-space:nowrap; flex-shrink:0;
+    }
+    .btn-pdf-item:hover { background:var(--blue); }
+    /* BOTÓN PDF DE TODOS */
+    #btn-pdf-todos {
+      width:100%; padding:11px; border-radius:9px; border:1px solid #0369a1;
+      background:#0c4a6e; color:var(--blue); font-size:.84rem; font-weight:700;
+      cursor:pointer; margin-bottom:12px;
+    }
+    #btn-pdf-todos:hover { background:#0369a1; color:#fff; }
   </style>
 </head>
 <body>
@@ -338,6 +358,15 @@
     <div class="offline-note" id="nota-offline-pts">
       📵 Sin conexión — mostrando última lista guardada + puntos pendientes locales
     </div>
+
+    <!-- Mapa de estado de puntos -->
+    <div class="card">
+      <div class="card-titulo">🗺 Mapa de puntos</div>
+      <div id="mapa-vista"></div>
+    </div>
+
+    <button id="btn-pdf-todos" onclick="descargarPdfTodos()">📄 Descargar PDF de todos los puntos</button>
+
     <div class="card-titulo" style="margin-bottom:10px">📍 Puntos de monitoreo</div>
     <div id="lista-puntos"><div class="cargando">Cargando…</div></div>
   </div>
@@ -455,8 +484,22 @@ if (TOKEN)  localStorage.setItem("ruralh2o_token", TOKEN);
 const TOKEN_USE = TOKEN || "";
 const USER_ROL  = sessionStorage.getItem("user_rol") || "";
 
+// El visualizador (jefatura) no registra mediciones ni crea puntos.
+// Se le ocultan las pestañas "Registrar" y "Nuevo"; conserva "Puntos" y "Avisos".
+const SOLO_LECTURA = USER_ROL === "visualizador";
+if (SOLO_LECTURA) {
+  ["nav-registrar", "nav-nuevo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  });
+}
+
 // ── Navegación ───────────────────────────────────────────────
 function cambiarPantalla(n) {
+  // El visualizador no accede a Registrar ni Nuevo
+  if (SOLO_LECTURA && (n === "registrar" || n === "nuevo")) {
+    n = "puntos";
+  }
   document.querySelectorAll(".pantalla").forEach(p=>p.classList.remove("activa"));
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("activo"));
   document.getElementById("pant-"+n).classList.add("activa");
@@ -637,6 +680,9 @@ async function cargarListaPuntos(){
     notaOffline.classList.add("visible");
   }
 
+  // Dibujar el mapa con los puntos del servidor
+  dibujarMapaVista(puntosServidor);
+
   const puntosPendientes=await idbGetAll(ST_PTS);
 
   const htmlServidor=puntosServidor.map(p=>{
@@ -652,6 +698,7 @@ async function cargarListaPuntos(){
         "<div class='punto-valores'>"+vals+"</div>"+
       "</div>"+
       "<span class='punto-estado "+ECLS[p.color]+"'>"+LABEL[p.color]+"</span>"+
+      "<button class='btn-pdf-item' onclick='descargarPdfPunto("+p.id+")'>📄 PDF</button>"+
       "</div>";
   }).join("");
 
@@ -672,6 +719,50 @@ async function cargarListaPuntos(){
   } else {
     lista.innerHTML=htmlPendientes+htmlServidor;
   }
+}
+
+// ── Descargas PDF ────────────────────────────────────────────
+function descargarPdfPunto(id){
+  window.open(API_BASE+"/puntos/"+id+"/reporte.pdf","_blank");
+}
+function descargarPdfTodos(){
+  window.open(API_BASE+"/reporte-mapa.pdf","_blank");
+}
+
+// ── Mapa de estado de puntos (en pestaña Puntos) ─────────────
+let mapaVista=null, mapaVistaMarcadores=[];
+const COLOR_HEX={green:"#22c55e",yellow:"#eab308",red:"#ef4444",gray:"#9ca3af"};
+function dibujarMapaVista(puntos){
+  const cont=document.getElementById("mapa-vista");
+  if(!cont || typeof L==="undefined") return;
+
+  if(!mapaVista){
+    mapaVista=L.map("mapa-vista").setView([-45.5712,-72.0685],8);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {attribution:"© OpenStreetMap"}).addTo(mapaVista);
+  }
+  mapaVistaMarcadores.forEach(m=>mapaVista.removeLayer(m));
+  mapaVistaMarcadores=[];
+
+  const LABEL={green:"✅ Apta",yellow:"⚠️ Advertencia",red:"❌ No apta",gray:"⬜ Sin mediciones"};
+  const conCoords=[];
+  puntos.forEach(p=>{
+    if(p.lat==null||p.lng==null) return;
+    const m=L.circleMarker([p.lat,p.lng],{
+      radius:9, fillColor:COLOR_HEX[p.color]||"#9ca3af",
+      color:"#fff", weight:2, fillOpacity:.9
+    }).addTo(mapaVista);
+    m.bindPopup(
+      "<b>"+p.nombre+"</b><br>"+p.comunidad+" · "+p.tipo_fuente+"<br>"+
+      (LABEL[p.color]||"")+"<br>"+
+      "<a href='"+API_BASE+"/puntos/"+p.id+"/reporte.pdf' target='_blank'>📄 Descargar PDF</a>"
+    );
+    mapaVistaMarcadores.push(m);
+    conCoords.push([p.lat,p.lng]);
+  });
+  if(conCoords.length) mapaVista.fitBounds(conCoords,{padding:[30,30],maxZoom:12});
+  setTimeout(()=>mapaVista.invalidateSize(),200);
+  setTimeout(()=>mapaVista.invalidateSize(),600);
 }
 
 // ── AVISOS (RF-08) ───────────────────────────────────────────
@@ -1132,6 +1223,9 @@ if("serviceWorker" in navigator){
 // ── Init ─────────────────────────────────────────────────────
 cargarPuntos();
 actualizarUI();
+
+// El visualizador arranca en "Puntos" (Registrar está oculta para su rol)
+if (SOLO_LECTURA) cambiarPantalla("puntos");
 </script>
 </body>
 </html>
