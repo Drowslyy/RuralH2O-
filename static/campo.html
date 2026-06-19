@@ -453,6 +453,7 @@ const TOKEN     = sessionStorage.getItem("token") || localStorage.getItem("rural
 if (!TOKEN) { window.location.replace("login.html"); }
 if (TOKEN)  localStorage.setItem("ruralh2o_token", TOKEN);
 const TOKEN_USE = TOKEN || "";
+const USER_ROL  = sessionStorage.getItem("user_rol") || "";
 
 // ── Navegación ───────────────────────────────────────────────
 function cambiarPantalla(n) {

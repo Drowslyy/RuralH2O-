@@ -66,22 +66,33 @@ self.addEventListener("fetch", (e) => {
   const esStatic   = esPropio && url.pathname.startsWith("/view/");
   const esApiGet   = esPropio && !esStatic && e.request.method === "GET";
 
-  // ── /view/* propios: Network-first con fallback a caché ─────
-  // (antes era cache-first, lo que dejaba HTML viejo "pegado".
-  //  Ahora siempre intentamos la versión fresca de la red primero
-  //  y solo caemos al caché si no hay conexión → mantiene offline.)
+  // ── /view/* propios: Cache-first + actualización background ─
   if (esStatic) {
     e.respondWith(
-      fetch(e.request).then((res) => {
-        if (res && res.status === 200)
-          caches.open(CACHE_NAME).then((c) => c.put(e.request, res.clone()));
-        return res;
-      }).catch(async () => {
-        const cached = await caches.match(e.request);
+      caches.match(e.request).then(async (cached) => {
+        // Actualizar en background (stale-while-revalidate)
+        fetch(e.request).then((res) => {
+          if (res && res.status === 200)
+            caches.open(CACHE_NAME).then((c) => c.put(e.request, res.clone()));
+        }).catch(() => {});
+
         if (cached) return cached;
-        // Sin red y sin caché → fallback para cualquier navegación
-        if (e.request.mode === "navigate")
-          return caches.match("/view/campo.html");
+
+        // No está en caché → intentar red
+        try {
+          const res = await fetch(e.request);
+          if (res && res.status === 200)
+            caches.open(CACHE_NAME).then((c) => c.put(e.request, res.clone()));
+          return res;
+        } catch (_) {
+          // Sin red y sin caché → fallback de navegación a la página pedida.
+          // Si pedía index.html devolvemos index; si no, campo.html.
+          if (e.request.mode === "navigate") {
+            const pedirIndex = url.pathname.includes("index.html");
+            const fallback = pedirIndex ? "/view/index.html" : "/view/campo.html";
+            return (await caches.match(fallback)) || (await caches.match("/view/campo.html"));
+          }
+        }
       })
     );
     return;
