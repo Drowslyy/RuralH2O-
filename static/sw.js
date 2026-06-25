@@ -5,7 +5,7 @@
 //  el caché de campo.html / login.html / etc.
 // ============================================================
 
-const CACHE_NAME = "ruralh2o-v6";
+const CACHE_NAME = "ruralh2o-v7";
 
 const STATIC_URLS = [
   "/view/campo.html",
