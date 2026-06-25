@@ -300,12 +300,13 @@
     </div>
 
     <div class="filtro-seccion">
-      <span class="filtro-label">Tipo de fuente</span>
+      <span class="filtro-label">Tipo de abastecimiento</span>
       <select id="sel-tipo" class="filtro-select">
         <option value="">— Todos —</option>
-        <option value="pozo">🕳 Pozo</option>
+        <option value="APR">🚰 APR (Agua Potable Rural)</option>
+        <option value="pozo">🕳 Pozo particular</option>
         <option value="vertiente">💧 Vertiente</option>
-        <option value="río">🏞 Río</option>
+        <option value="río">🏞 Captación superficial (río)</option>
       </select>
     </div>
 
@@ -887,7 +888,7 @@ function barraParam(etiqueta, valor, param, cls) {
 }
 
 function iconoTipo(tipo) {
-  return { pozo:"🕳", vertiente:"💧", río:"🏞", rio:"🏞" }[tipo?.toLowerCase()] || "📍";
+  return { apr:"🚰", pozo:"🕳", vertiente:"💧", río:"🏞", rio:"🏞" }[tipo?.toLowerCase()] || "📍";
 }
 
 function diasTexto(d) {
@@ -1029,3 +1030,4 @@ cargarPuntos();
 </script>
 </body>
 </html>
+
