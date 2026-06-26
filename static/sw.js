@@ -5,7 +5,7 @@
 //  el caché de campo.html / login.html / etc.
 // ============================================================
 
-const CACHE_NAME = "ruralh2o-v7";
+const CACHE_NAME = "ruralh2o-v8";
 
 const STATIC_URLS = [
   "/view/campo.html",
@@ -61,7 +61,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   const esPropio   = url.origin === self.location.origin;
-  const esLeaflet  = url.hostname === "unpkg.com";
+  const esLeaflet  = url.hostname === "unpkg.com" && !url.pathname.includes("leaflet-heat");
   const esTile     = url.hostname.endsWith(".tile.openstreetmap.org");
   const esStatic   = esPropio && url.pathname.startsWith("/view/");
   const esApiGet   = esPropio && !esStatic && e.request.method === "GET";
@@ -107,7 +107,7 @@ self.addEventListener("fetch", (e) => {
           if (res && res.status === 200)
             caches.open(CACHE_NAME).then((c) => c.put(e.request, res.clone()));
           return res;
-        }).catch(() => cached);
+        }).catch(() => cached || new Response("", { status: 503 }));
       })
     );
     return;
