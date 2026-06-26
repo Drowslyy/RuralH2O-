@@ -310,12 +310,13 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div class="campo">
-            <label for="inp-tipo">Tipo de fuente *</label>
+            <label for="inp-tipo">Tipo de abastecimiento *</label>
             <select id="inp-tipo" required>
               <option value="">— Seleccionar —</option>
-              <option value="pozo">🕳 Pozo</option>
+              <option value="APR">🚰 APR (Agua Potable Rural)</option>
+              <option value="pozo">🕳 Pozo particular</option>
               <option value="vertiente">💧 Vertiente</option>
-              <option value="río">🏞 Río</option>
+              <option value="río">🏞 Captación superficial (río)</option>
             </select>
           </div>
           <div class="campo">
@@ -772,5 +773,3 @@ actualizarUI();
 </script>
 </body>
 </html>
-
-
